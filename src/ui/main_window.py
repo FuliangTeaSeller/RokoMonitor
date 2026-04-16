@@ -123,6 +123,10 @@ class MainWindow(QMainWindow):
         entry_btn.clicked.connect(self._open_entry_dialog)
         search_layout.addWidget(entry_btn)
 
+        team_btn = QPushButton("配队识别")
+        team_btn.clicked.connect(self._open_team_dialog)
+        search_layout.addWidget(team_btn)
+
         layout.addLayout(search_layout)
 
         # --- 搜索结果列表 ---
@@ -221,4 +225,9 @@ class MainWindow(QMainWindow):
 
     def _open_entry_dialog(self):
         dlg = EntryDialog(self._session, self)
+        dlg.exec()
+
+    def _open_team_dialog(self):
+        from src.ui.team_dialog import TeamRecognitionDialog
+        dlg = TeamRecognitionDialog(self._session, self)
         dlg.exec()
