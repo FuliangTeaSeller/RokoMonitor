@@ -21,6 +21,7 @@ class SkillInfo:
     power: Optional[int]
     energy_consumption: int
     description: Optional[str]
+    image_path: Optional[str] = None
 
 
 @dataclass
@@ -28,6 +29,7 @@ class SpriteInfo:
     """精灵完整信息（含属性与技能池）"""
     id: int
     name: str
+    image_path: Optional[str] = None
     attributes: list[str] = field(default_factory=list)
     skills: list[SkillInfo] = field(default_factory=list)
 
@@ -40,7 +42,7 @@ def search_sprites_by_name(session: Session, keyword: str) -> list[SpriteInfo]:
     results = []
     for sp in sprites:
         attrs = _get_sprite_attributes(session, sp.id)
-        results.append(SpriteInfo(id=sp.id, name=sp.name, attributes=attrs))
+        results.append(SpriteInfo(id=sp.id, name=sp.name, image_path=sp.image_path, attributes=attrs))
     return results
 
 
@@ -142,6 +144,7 @@ def _get_sprite_skills(session: Session, sprite_id: int) -> list[SkillInfo]:
             power=s.power,
             energy_consumption=s.energy_consumption,
             description=s.description,
+            image_path=s.image_path,
         )
         for s in skills
     ]

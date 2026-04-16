@@ -5,9 +5,10 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem, QPushButton, QFrame,
 )
 from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon
 
 from src.database.queries import SpriteInfo, SkillInfo
+from src.ui.image_utils import load_icon
 
 
 class OverlayWindow(QWidget):
@@ -72,6 +73,13 @@ class OverlayWindow(QWidget):
 
         # 标题栏（可拖动）
         title_bar = QHBoxLayout()
+
+        # 精灵图标
+        self._sprite_icon_label = QLabel()
+        self._sprite_icon_label.setFixedSize(40, 40)
+        self._sprite_icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_bar.addWidget(self._sprite_icon_label)
+
         self._name_label = QLabel()
         self._name_label.setFont(QFont("Microsoft YaHei", 14, QFont.Weight.Bold))
         title_bar.addWidget(self._name_label)
@@ -97,19 +105,20 @@ class OverlayWindow(QWidget):
 
         # 技能表格
         self._table = QTableWidget()
-        self._table.setColumnCount(5)
-        self._table.setHorizontalHeaderLabels(["技能", "属性", "类别", "威力", "能耗"])
+        self._table.setColumnCount(6)
+        self._table.setHorizontalHeaderLabels(["", "技能", "属性", "类别", "威力", "能耗"])
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.verticalHeader().setVisible(False)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
         # 列宽
-        self._table.setColumnWidth(0, 90)
-        self._table.setColumnWidth(1, 50)
-        self._table.setColumnWidth(2, 50)
-        self._table.setColumnWidth(3, 50)
-        self._table.setColumnWidth(4, 50)
+        self._table.setColumnWidth(0, 32)  # 图标列
+        self._table.setColumnWidth(1, 80)
+        self._table.setColumnWidth(2, 45)
+        self._table.setColumnWidth(3, 45)
+        self._table.setColumnWidth(4, 45)
+        self._table.setColumnWidth(5, 45)
         layout.addWidget(self._table)
 
         # 描述区
@@ -125,14 +134,30 @@ class OverlayWindow(QWidget):
         self._name_label.setText(info.name)
         self._attr_label.setText(" / ".join(info.attributes))
 
+        # 加载并显示精灵图标
+        sprite_icon = load_icon(info.image_path, size=(36, 36))
+        if sprite_icon:
+            self._sprite_icon_label.setPixmap(sprite_icon)
+        else:
+            self._sprite_icon_label.clear()
+
         self._table.setRowCount(len(info.skills))
         for row, skill in enumerate(info.skills):
-            self._table.setItem(row, 0, QTableWidgetItem(skill.name))
-            self._table.setItem(row, 1, QTableWidgetItem(skill.attribute))
-            self._table.setItem(row, 2, QTableWidgetItem(skill.category))
+            # 技能图标列
+            icon = load_icon(skill.image_path, size=(24, 24))
+            if icon:
+                icon_item = QTableWidgetItem()
+                icon_item.setIcon(QIcon(icon))
+                self._table.setItem(row, 0, icon_item)
+            else:
+                self._table.setItem(row, 0, QTableWidgetItem(""))
+
+            self._table.setItem(row, 1, QTableWidgetItem(skill.name))
+            self._table.setItem(row, 2, QTableWidgetItem(skill.attribute))
+            self._table.setItem(row, 3, QTableWidgetItem(skill.category))
             power_text = str(skill.power) if skill.power else "—"
-            self._table.setItem(row, 3, QTableWidgetItem(power_text))
-            self._table.setItem(row, 4, QTableWidgetItem(str(skill.energy_consumption)))
+            self._table.setItem(row, 4, QTableWidgetItem(power_text))
+            self._table.setItem(row, 5, QTableWidgetItem(str(skill.energy_consumption)))
 
     def _on_skill_clicked(self, row, _col):
         if 0 <= row < len(self._sprite_info.skills):

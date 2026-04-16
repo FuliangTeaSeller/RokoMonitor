@@ -6,13 +6,14 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QMessageBox,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon
 
 from sqlalchemy.orm import Session
 
 from src.database.queries import search_sprites_by_name, get_sprite_detail, SpriteInfo, SkillInfo
 from src.ui.overlay import OverlayWindow
 from src.ui.entry_dialog import EntryDialog
+from src.ui.image_utils import load_icon
 
 
 class MainWindow(QMainWindow):
@@ -144,18 +145,19 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._sprite_info_label)
 
         self._skill_table = QTableWidget()
-        self._skill_table.setColumnCount(6)
-        self._skill_table.setHorizontalHeaderLabels(["技能", "属性", "类别", "威力", "能耗", "描述"])
+        self._skill_table.setColumnCount(7)
+        self._skill_table.setHorizontalHeaderLabels(["", "技能", "属性", "类别", "威力", "能耗", "描述"])
         self._skill_table.horizontalHeader().setStretchLastSection(True)
         self._skill_table.verticalHeader().setVisible(False)
         self._skill_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._skill_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._skill_table.setAlternatingRowColors(True)
-        self._skill_table.setColumnWidth(0, 100)
-        self._skill_table.setColumnWidth(1, 50)
+        self._skill_table.setColumnWidth(0, 36)  # 图标列
+        self._skill_table.setColumnWidth(1, 90)
         self._skill_table.setColumnWidth(2, 50)
         self._skill_table.setColumnWidth(3, 50)
         self._skill_table.setColumnWidth(4, 50)
+        self._skill_table.setColumnWidth(5, 50)
         layout.addWidget(self._skill_table)
 
     def _do_search(self):
@@ -166,7 +168,12 @@ class MainWindow(QMainWindow):
         results = search_sprites_by_name(self._session, keyword)
         self._result_list.clear()
         for sp in results:
-            item = QListWidgetItem(f"{sp.name}  [{'/'.join(sp.attributes)}]")
+            # 加载精灵图标
+            icon = load_icon(sp.image_path, size=(32, 32))
+            if icon:
+                item = QListWidgetItem(QIcon(icon), f"{sp.name}  [{'/'.join(sp.attributes)}]")
+            else:
+                item = QListWidgetItem(f"{sp.name}  [{'/'.join(sp.attributes)}]")
             item.setData(Qt.ItemDataRole.UserRole, sp.id)
             self._result_list.addItem(item)
 
@@ -186,14 +193,23 @@ class MainWindow(QMainWindow):
         self._sprite_info_label.setText(f"{info.name}  [{'/'.join(info.attributes)}]")
         self._skill_table.setRowCount(len(info.skills))
         for row, skill in enumerate(info.skills):
-            self._skill_table.setItem(row, 0, QTableWidgetItem(skill.name))
-            self._skill_table.setItem(row, 1, QTableWidgetItem(skill.attribute))
-            self._skill_table.setItem(row, 2, QTableWidgetItem(skill.category))
+            # 技能图标列
+            icon = load_icon(skill.image_path, size=(24, 24))
+            if icon:
+                icon_item = QTableWidgetItem()
+                icon_item.setIcon(QIcon(icon))
+                self._skill_table.setItem(row, 0, icon_item)
+            else:
+                self._skill_table.setItem(row, 0, QTableWidgetItem(""))
+
+            self._skill_table.setItem(row, 1, QTableWidgetItem(skill.name))
+            self._skill_table.setItem(row, 2, QTableWidgetItem(skill.attribute))
+            self._skill_table.setItem(row, 3, QTableWidgetItem(skill.category))
             power_text = str(skill.power) if skill.power else "—"
-            self._skill_table.setItem(row, 3, QTableWidgetItem(power_text))
-            self._skill_table.setItem(row, 4, QTableWidgetItem(str(skill.energy_consumption)))
+            self._skill_table.setItem(row, 4, QTableWidgetItem(power_text))
+            self._skill_table.setItem(row, 5, QTableWidgetItem(str(skill.energy_consumption)))
             desc_text = skill.description or ""
-            self._skill_table.setItem(row, 5, QTableWidgetItem(desc_text))
+            self._skill_table.setItem(row, 6, QTableWidgetItem(desc_text))
 
     def _show_overlay(self):
         if self._current_sprite is None:
