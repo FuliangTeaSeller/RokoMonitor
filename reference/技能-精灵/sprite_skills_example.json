@@ -1,0 +1,12 @@
+{
+    "version": "1.0",
+    "description": "精灵-技能绑定数据导入示例文件",
+    "bindings": [
+        {
+            "sprite_name": "火花",
+            "skill_names": [
+                "焚烧烙印"
+            ]
+        }
+    ]
+}

@@ -214,3 +214,50 @@ CREATE INDEX idx_sprite_skill_skill ON sprite_skill(skill_id);
 CREATE INDEX idx_sprite_attribute_sprite ON sprite_attribute(sprite_id);
 CREATE INDEX idx_attribute_name ON attribute(name);
 ```
+
+## 6. 数据导入工具
+
+### 6.1 精灵-技能绑定批量导入
+
+使用 JSON 文件批量导入精灵与技能的绑定关系。
+
+**JSON 格式：**
+
+```json
+{
+    "version": "1.0",
+    "description": "精灵-技能绑定数据导入文件（可选）",
+    "bindings": [
+        {
+            "sprite_name": "火花",
+            "skill_names": ["火花喷射", "火焰冲撞", "灼烧"]
+        },
+        {
+            "sprite_name": "水蓝蓝",
+            "skill_names": ["水枪", "水之波动"]
+        }
+    ]
+}
+```
+
+**使用方法：**
+
+```bash
+# 激活环境
+conda activate rokomonitor
+
+# 运行导入
+python tools/import_sprite_skills.py reference/sprite_skills_example.json
+
+# 静默模式（只输出摘要）
+python tools/import_sprite_skills.py reference/sprite_skills_example.json -q
+```
+
+**特性：**
+- 使用精灵名称和技能名称，便于用户编辑
+- 自动查找对应 ID 并建立绑定关系
+- 支持增量导入，不删除已有技能
+- 幂等性：已存在的绑定自动跳过
+- 完整的错误处理和统计报告
+
+**示例文件：** `reference/sprite_skills_example.json`
