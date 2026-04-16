@@ -1,318 +1,275 @@
-#!/usr/bin/env python3
 """
-精灵图鉴 HTML 数据提取脚本
-从 rkteambuilder.com 保存的 HTML 文件中提取精灵数据
+从精灵图鉴HTML提取数据并导入到数据库
+
+HTML结构分析:
+- 精灵卡片: <div class="divsort" data-param1="形态" data-param2="属性" ...>
+- 精灵名称: <span class="font-mainfeiziti">...</span>
+- 精灵图片: <img class="rocom_prop_icon" srcset="...">
+- 属性图标: <img class="rocom_pet_icon" srcset="...">
+- 属性名称: data-param2 属性值 (如"光"、"火"、"水"等)
 """
 
-import re
 import sqlite3
 import os
 import shutil
 from pathlib import Path
 from bs4 import BeautifulSoup
-from typing import List, Dict, Tuple
+from PIL import Image
+import urllib.parse
+import re
 
+# 路径配置
+PROJECT_ROOT = Path(__file__).parent.parent
+HTML_PATH = PROJECT_ROOT / "reference" / "精灵" / "新建文件夹" / "精灵图鉴 - 洛克王国_手游WIKI_BWIKI_哔哩哔哩.html"
+HTML_FILES_DIR = PROJECT_ROOT / "reference" / "精灵" / "新建文件夹" / "精灵图鉴 - 洛克王国_手游WIKI_BWIKI_哔哩哔哩_files"
+DB_PATH = PROJECT_ROOT / "roko_monitor.db"
+IMAGES_SPRITES_DIR = PROJECT_ROOT / "data" / "images" / "sprites"
+IMAGES_ATTRIBUTES_DIR = PROJECT_ROOT / "data" / "images" / "attributes"
 
-# 属性图标文件名到中文名称的映射
-ATTRIBUTE_MAP = {
-    'normal.png': '普通',
-    'grass.png': '草',
-    'fire.png': '火',
-    'water.png': '水',
-    'light.png': '光',
-    'ground.png': '地',
-    'ice.png': '冰',
-    'dragon.png': '龙',
-    'electric.png': '电',
-    'poison.png': '毒',
-    'bug.png': '虫',
-    'fighting.png': '武',
-    'flying.png': '翼',
-    'cute.png': '萌',
-    'ghost.png': '幽',
-    'dark.png': '恶',
-    'mechanical.png': '机械',
-    'illusion.png': '幻',
+# 属性文件名映射 (中文 -> 英文)
+ATTRIBUTE_NAME_MAP = {
+    "火": "fire",
+    "水": "water",
+    "草": "grass",
+    "冰": "ice",
+    "龙": "dragon",
+    "电": "electric",
+    "毒": "poison",
+    "虫": "bug",
+    "武": "fighting",
+    "翼": "flying",
+    "萌": "cute",
+    "幽": "ghost",
+    "恶": "dark",
+    "机械": "machine",
+    "幻": "illusion",
+    "光": "light",
+    "地": "ground",
+    "普通": "normal",
 }
 
 
-def extract_sprites_from_html(html_path: str, files_dir: str) -> List[Dict]:
-    """
-    从 HTML 文件中提取精灵数据
-
-    Args:
-        html_path: HTML 文件路径
-        files_dir: 附件文件目录路径
-
-    Returns:
-        精灵数据列表，每个元素包含 id, name, attributes, image_file
-    """
-    with open(html_path, 'r', encoding='utf-8') as f:
-        html = f.read()
-
-    soup = BeautifulSoup(html, 'html.parser')
-
-    sprites = []
-
-    # 查找所有精灵链接
-    for link in soup.find_all('a', href=re.compile(r'dex/monsters/\d+')):
-        # 提取 ID
-        href = link.get('href', '')
-        id_match = re.search(r'dex/monsters/(\d+)', href)
-        if not id_match:
-            continue
-        sprite_id = int(id_match.group(1))
-
-        # 提取名称
-        name_div = link.find('div', class_='text-sm')
-        if not name_div:
-            continue
-        name = name_div.get('title', '').strip()
-
-        # 提取图片文件名
-        img = link.find('img', src=re.compile(r'\.png$'))
-        image_file = None
-        if img:
-            src = img.get('src', '')
-            # 提取文件名（去掉路径前缀）
-            image_file = os.path.basename(src)
-
-        # 提取属性
-        attributes = []
-        attr_spans = link.find_all('span', class_=re.compile(r'inline-flex'))
-        for attr_span in attr_spans:
-            attr_img = attr_span.find('img')
-            if attr_img:
-                src = attr_img.get('src', '')
-                icon_file = os.path.basename(src)
-                if icon_file in ATTRIBUTE_MAP:
-                    attributes.append(ATTRIBUTE_MAP[icon_file])
-
-        if name and attributes:
-            sprites.append({
-                'id': sprite_id,
-                'name': name,
-                'attributes': attributes,
-                'image_file': image_file,
-            })
-
-    return sprites
+def ensure_image_dirs():
+    """确保图片目录存在"""
+    IMAGES_SPRITES_DIR.mkdir(parents=True, exist_ok=True)
+    IMAGES_ATTRIBUTES_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"图片目录准备完成:")
+    print(f"  - {IMAGES_SPRITES_DIR}")
+    print(f"  - {IMAGES_ATTRIBUTES_DIR}")
 
 
-def init_database(db_path: str) -> None:
-    """
-    初始化数据库，创建必要的表
-    """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+def get_or_create_attribute(cursor, attribute_name):
+    """获取或创建属性记录"""
+    # 查询属性是否存在
+    cursor.execute("SELECT id FROM attribute WHERE name = ?", (attribute_name,))
+    result = cursor.fetchone()
 
-    # 创建属性表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS attribute (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            image_path TEXT
-        )
-    ''')
+    if result:
+        return result[0]
 
-    # 创建技能表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS skill (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            energy_consumption INTEGER NOT NULL,
-            category TEXT NOT NULL CHECK (category IN ('魔攻', '物攻', '变化')),
-            attribute_id INTEGER NOT NULL,
-            power INTEGER,
-            description TEXT,
-            beizhu TEXT,
-            image_path TEXT,
-            FOREIGN KEY (attribute_id) REFERENCES attribute(id)
-        )
-    ''')
+    # 创建新属性
+    image_filename = f"30px-图标_宠物_属性_{attribute_name}.png"
+    source_path = HTML_FILES_DIR / image_filename
 
-    # 创建精灵表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sprite (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            image_path TEXT
-        )
-    ''')
+    if source_path.exists():
+        # 复制属性图片
+        english_name = ATTRIBUTE_NAME_MAP.get(attribute_name, attribute_name)
+        dest_path = IMAGES_ATTRIBUTES_DIR / f"{english_name}.png"
 
-    # 创建精灵-属性关联表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sprite_attribute (
-            sprite_id INTEGER NOT NULL,
-            attribute_id INTEGER NOT NULL,
-            PRIMARY KEY (sprite_id, attribute_id),
-            FOREIGN KEY (sprite_id) REFERENCES sprite(id) ON DELETE CASCADE,
-            FOREIGN KEY (attribute_id) REFERENCES attribute(id) ON DELETE CASCADE
-        )
-    ''')
+        # 转换webp到png（如果需要）
+        try:
+            with Image.open(source_path) as img:
+                img.save(dest_path, "PNG")
+            db_image_path = f"data/images/attributes/{english_name}.png"
+            print(f"  复制属性图片: {attribute_name} -> {db_image_path}")
+        except Exception as e:
+            print(f"  警告: 无法转换属性图片 {attribute_name}: {e}")
+            db_image_path = None
+    else:
+        db_image_path = None
+        print(f"  警告: 未找到属性图片 {image_filename}")
 
-    # 创建精灵-技能关联表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sprite_skill (
-            sprite_id INTEGER NOT NULL,
-            skill_id INTEGER NOT NULL,
-            PRIMARY KEY (sprite_id, skill_id),
-            FOREIGN KEY (sprite_id) REFERENCES sprite(id) ON DELETE CASCADE,
-            FOREIGN KEY (skill_id) REFERENCES skill(id) ON DELETE CASCADE
-        )
-    ''')
-
-    # 创建索引
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sprite_name ON sprite(name)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_skill_name ON skill(name)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sprite_skill_sprite ON sprite_skill(sprite_id)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sprite_skill_skill ON sprite_skill(skill_id)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sprite_attribute_sprite ON sprite_attribute(sprite_id)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_attribute_name ON attribute(name)')
-
-    conn.commit()
-    conn.close()
+    cursor.execute(
+        "INSERT INTO attribute (name, image_path) VALUES (?, ?)",
+        (attribute_name, db_image_path)
+    )
+    return cursor.lastrowid
 
 
-def insert_attributes(db_path: str, attributes: List[str]) -> Dict[str, int]:
-    """
-    插入属性数据并返回属性名称到 ID 的映射
+def extract_sprite_data(sprite_div, sprite_id):
+    """解析单个精灵卡片"""
+    sprite_data = {}
 
-    Args:
-        db_path: 数据库路径
-        attributes: 属性名称列表
+    # 从data-param2获取属性
+    sprite_data["attribute"] = sprite_div.get("data-param2", "")
 
-    Returns:
-        属性名称到 ID 的映射字典
-    """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    # 获取精灵名称
+    name_elem = sprite_div.find("span", class_="font-mainfeiziti")
+    if name_elem:
+        sprite_data["name"] = name_elem.get_text(strip=True)
+    else:
+        sprite_data["name"] = f"未知精灵_{sprite_id}"
 
-    attr_map = {}
-    for attr_name in attributes:
-        # 检查是否已存在
-        cursor.execute('SELECT id FROM attribute WHERE name = ?', (attr_name,))
-        row = cursor.fetchone()
-        if row:
-            attr_map[attr_name] = row[0]
+    # 获取精灵图片URL
+    icon_elem = sprite_div.find("img", class_="rocom_prop_icon")
+    if icon_elem:
+        # 从srcset中提取图片URL
+        srcset = icon_elem.get("srcset", "")
+        if srcset:
+            # srcset格式: "url1 1.5x, url2 2x"
+            # 我们使用第一个URL
+            urls = srcset.split(",")
+            if urls:
+                sprite_data["image_url"] = urls[0].strip().split()[0]
         else:
-            # 插入新属性
-            cursor.execute('INSERT INTO attribute (name) VALUES (?)', (attr_name,))
-            attr_id = cursor.lastrowid
-            attr_map[attr_name] = attr_id
+            # 如果没有srcset，尝试src
+            sprite_data["image_url"] = icon_elem.get("src", "")
+    else:
+        sprite_data["image_url"] = ""
 
-    conn.commit()
-    conn.close()
-    return attr_map
+    return sprite_data
 
 
-def insert_sprites(db_path: str, sprites: List[Dict], attr_map: Dict[str, int], source_img_dir: str, target_img_dir: str) -> None:
-    """
-    插入精灵数据并复制图片
+def download_image(url, dest_path):
+    """下载并保存图片"""
+    try:
+        # 如果是本地文件路径
+        if url.startswith("./") or url.startswith(".."):
+            # 相对于HTML文件的路径
+            html_dir = HTML_PATH.parent
+            img_path = html_dir / url.lstrip("./")
+            if not img_path.exists():
+                # 尝试从_files目录查找
+                filename = os.path.basename(url)
+                img_path = HTML_FILES_DIR / filename
 
-    Args:
-        db_path: 数据库路径
-        sprites: 精灵数据列表
-        attr_map: 属性名称到 ID 的映射
-        source_img_dir: 源图片目录
-        target_img_dir: 目标图片目录
-    """
-    # 确保目标目录存在
-    os.makedirs(target_img_dir, exist_ok=True)
+            if img_path.exists():
+                with Image.open(img_path) as img:
+                    img.save(dest_path, "PNG")
+                return True
+        elif url.startswith("http"):
+            # 如果是网络URL，使用urllib下载
+            import urllib.request
+            urllib.request.urlretrieve(url, dest_path)
+            with Image.open(dest_path) as img:
+                img.save(dest_path, "PNG")
+            return True
+        return False
+    except Exception as e:
+        print(f"  下载图片失败: {e}")
+        return False
 
-    conn = sqlite3.connect(db_path)
+
+def import_sprites():
+    """从HTML导入精灵到数据库"""
+    print("=== 开始导入精灵数据 ===\n")
+
+    # 确保图片目录存在
+    ensure_image_dirs()
+
+    # 连接数据库
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    for sprite in sprites:
-        sprite_id = sprite['id']
-        name = sprite['name']
-        attributes = sprite['attributes']
-        image_file = sprite['image_file']
+    # 读取HTML文件
+    print(f"读取HTML文件: {HTML_PATH}")
+    with open(HTML_PATH, "r", encoding="utf-8") as f:
+        html_content = f.read()
 
-        # 确定图片路径
-        image_path = None
-        if image_file:
-            # 复制图片
-            source_path = os.path.join(source_img_dir, image_file)
-            if os.path.exists(source_path):
-                # 使用精灵 ID 作为目标文件名
-                target_file = f"{sprite_id}.png"
-                target_path = os.path.join(target_img_dir, target_file)
+    soup = BeautifulSoup(html_content, "html.parser")
 
-                # 只有当文件不存在时才复制
-                if not os.path.exists(target_path):
-                    shutil.copy2(source_path, target_path)
+    # 查找所有精灵卡片
+    sprite_divs = soup.find_all("div", class_="divsort")
+    print(f"找到 {len(sprite_divs)} 个精灵\n")
 
-                image_path = f"data/images/sprites/{target_file}"
+    # 导入精灵
+    imported_count = 0
+    skipped_count = 0
 
-        # 插入精灵（如果不存在）
-        cursor.execute('''
-            INSERT OR IGNORE INTO sprite (id, name, image_path)
-            VALUES (?, ?, ?)
-        ''', (sprite_id, name, image_path))
+    for idx, sprite_div in enumerate(sprite_divs, start=1):
+        sprite_data = extract_sprite_data(sprite_div, idx)
 
-        # 插入属性关联
-        for attr_name in attributes:
-            if attr_name in attr_map:
-                cursor.execute('''
-                    INSERT OR IGNORE INTO sprite_attribute (sprite_id, attribute_id)
-                    VALUES (?, ?)
-                ''', (sprite_id, attr_map[attr_name]))
+        # 检查精灵是否已存在
+        cursor.execute("SELECT id FROM sprite WHERE name = ?", (sprite_data["name"],))
+        if cursor.fetchone():
+            print(f"[{idx}] 跳过已存在精灵: {sprite_data['name']}")
+            skipped_count += 1
+            continue
 
+        # 获取或创建属性
+        attribute_name = sprite_data["attribute"]
+        if not attribute_name:
+            print(f"[{idx}] 警告: 精灵 '{sprite_data['name']}' 没有属性，跳过")
+            skipped_count += 1
+            continue
+
+        attribute_id = get_or_create_attribute(cursor, attribute_name)
+
+        # 处理精灵图片
+        image_url = sprite_data["image_url"]
+        db_image_path = None
+
+        if image_url:
+            dest_path = IMAGES_SPRITES_DIR / f"{idx}.png"
+
+            # 尝试获取图片文件名
+            filename = os.path.basename(image_url)
+
+            # 尝试从本地_files目录查找
+            source_path = HTML_FILES_DIR / filename
+            if not source_path.exists():
+                # 尝试解码URL编码的文件名
+                decoded_filename = urllib.parse.unquote(filename)
+                source_path = HTML_FILES_DIR / decoded_filename
+
+            if source_path.exists():
+                try:
+                    with Image.open(source_path) as img:
+                        img.save(dest_path, "PNG")
+                    db_image_path = f"data/images/sprites/{idx}.png"
+                except Exception as e:
+                    print(f"[{idx}] 警告: 无法转换精灵图片 {filename}: {e}")
+            else:
+                print(f"[{idx}] 警告: 未找到精灵图片 {filename}")
+
+        # 插入精灵记录
+        cursor.execute(
+            "INSERT INTO sprite (name, image_path) VALUES (?, ?)",
+            (sprite_data["name"], db_image_path)
+        )
+        sprite_id = cursor.lastrowid
+
+        # 关联属性
+        cursor.execute(
+            "INSERT INTO sprite_attribute (sprite_id, attribute_id) VALUES (?, ?)",
+            (sprite_id, attribute_id)
+        )
+
+        imported_count += 1
+        print(f"[{idx}] 导入: {sprite_data['name']} ({attribute_name})")
+
+    # 提交事务
     conn.commit()
+
+    # 显示统计
+    print(f"\n=== 导入完成 ===")
+    print(f"总计: {len(sprite_divs)} 个精灵")
+    print(f"成功导入: {imported_count} 个")
+    print(f"跳过: {skipped_count} 个")
+
+    # 显示属性统计
+    cursor.execute("SELECT COUNT(*) FROM attribute")
+    attr_count = cursor.fetchone()[0]
+    print(f"属性总数: {attr_count} 个")
+
+    # 显示精灵统计
+    cursor.execute("SELECT COUNT(*) FROM sprite")
+    sprite_count = cursor.fetchone()[0]
+    print(f"精灵总数: {sprite_count} 个")
+
     conn.close()
+    print("\n数据库已更新")
 
 
-def main():
-    # 配置路径
-    project_root = Path(__file__).parent.parent
-    html_path = project_root / 'reference' / '精灵' / '精灵图鉴 _ 洛克王国_ 世界.html'
-    files_dir = project_root / 'reference' / '精灵' / '精灵图鉴 _ 洛克王国_ 世界_files'
-    db_path = project_root / 'roko_monitor.db'
-    target_img_dir = project_root / 'data' / 'images' / 'sprites'
-
-    print(f"项目根目录: {project_root}")
-    print(f"HTML 文件: {html_path}")
-    print(f"附件目录: {files_dir}")
-    print(f"数据库: {db_path}")
-    print(f"目标图片目录: {target_img_dir}")
-    print()
-
-    # 检查文件是否存在
-    if not html_path.exists():
-        print(f"错误: HTML 文件不存在: {html_path}")
-        return
-
-    if not files_dir.exists():
-        print(f"错误: 附件目录不存在: {files_dir}")
-        return
-
-    # 初始化数据库
-    print("初始化数据库...")
-    init_database(str(db_path))
-
-    # 提取精灵数据
-    print("提取精灵数据...")
-    sprites = extract_sprites_from_html(str(html_path), str(files_dir))
-    print(f"找到 {len(sprites)} 个精灵")
-
-    # 收集所有属性
-    all_attributes = set()
-    for sprite in sprites:
-        all_attributes.update(sprite['attributes'])
-
-    print(f"找到 {len(all_attributes)} 个属性: {sorted(all_attributes)}")
-
-    # 插入属性
-    print("插入属性数据...")
-    attr_map = insert_attributes(str(db_path), sorted(all_attributes))
-
-    # 插入精灵数据
-    print("插入精灵数据...")
-    insert_sprites(str(db_path), sprites, attr_map, str(files_dir), str(target_img_dir))
-
-    print("完成!")
-
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    import_sprites()

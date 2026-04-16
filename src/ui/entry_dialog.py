@@ -10,7 +10,15 @@ from PyQt6.QtCore import Qt
 from sqlalchemy.orm import Session
 
 from src.database.models import Attribute, Skill
-from src.database.queries import get_all_attributes, get_all_skills, get_all_sprites, add_sprite, add_skill
+from src.database.queries import (
+    get_all_attributes,
+    get_all_skills,
+    get_all_sprites,
+    add_sprite,
+    add_skill,
+    add_sprite_skills,
+    get_sprite_skill_ids,
+)
 
 
 class EntryDialog(QDialog):
@@ -28,6 +36,7 @@ class EntryDialog(QDialog):
         tabs = QTabWidget()
         tabs.addTab(self._build_sprite_tab(), "精灵录入")
         tabs.addTab(self._build_skill_tab(), "技能录入")
+        tabs.addTab(self._build_bind_tab(), "精灵-技能绑定")
         layout.addWidget(tabs)
 
     # ---- 精灵录入 ----
@@ -155,3 +164,82 @@ class EntryDialog(QDialog):
             self._sk_desc.clear()
         except Exception as e:
             QMessageBox.critical(self, "错误", f"添加失败：{e}")
+
+    # ---- 精灵-技能绑定 ----
+    def _build_bind_tab(self) -> QWidget:
+        """构建精灵-技能绑定标签页"""
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        # 精灵选择下拉框
+        self._bind_sprite_selector = QComboBox()
+        self._bind_sprite_selector.addItem("-- 请选择精灵 --")
+        sprites = get_all_sprites(self._session)
+        for sp in sprites:
+            self._bind_sprite_selector.addItem(sp.name, sp.id)
+        self._bind_sprite_selector.currentIndexChanged.connect(self._on_bind_sprite_changed)
+        layout.addRow("选择精灵：", self._bind_sprite_selector)
+
+        # 可选技能列表
+        self._bind_skill_list = QListWidget()
+        self._bind_skill_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        self._bind_skill_list.setMaximumHeight(200)
+        skills = get_all_skills(self._session)
+        for s in skills:
+            item = QListWidgetItem(f"{s.name} ({s.attribute.name})")
+            item.setData(Qt.ItemDataRole.UserRole, s.id)
+            self._bind_skill_list.addItem(item)
+        layout.addRow("可选技能（可多选）：", self._bind_skill_list)
+
+        # 绑定按钮
+        bind_btn = QPushButton("绑定选中技能")
+        bind_btn.clicked.connect(self._bind_skills)
+        layout.addRow(bind_btn)
+
+        return widget
+
+    def _on_bind_sprite_changed(self):
+        """精灵选择改变时，高亮该精灵已有技能"""
+        sprite_id = self._bind_sprite_selector.currentData()
+        if sprite_id is None or sprite_id == -1:
+            self._bind_skill_list.clearSelection()
+            return
+
+        # 获取该精灵已有技能ID
+        existing_skill_ids = get_sprite_skill_ids(self._session, sprite_id)
+
+        # 高亮已有技能
+        self._bind_skill_list.clearSelection()
+        for i in range(self._bind_skill_list.count()):
+            item = self._bind_skill_list.item(i)
+            skill_id = item.data(Qt.ItemDataRole.UserRole)
+            if skill_id in existing_skill_ids:
+                item.setSelected(True)
+
+    def _bind_skills(self):
+        """绑定选中的技能到当前精灵"""
+        sprite_id = self._bind_sprite_selector.currentData()
+        if sprite_id is None or sprite_id == -1:
+            QMessageBox.warning(self, "提示", "请先选择精灵")
+            return
+
+        skill_ids = [
+            item.data(Qt.ItemDataRole.UserRole)
+            for item in self._bind_skill_list.selectedItems()
+        ]
+
+        if not skill_ids:
+            QMessageBox.warning(self, "提示", "请至少选择一个技能")
+            return
+
+        try:
+            count = add_sprite_skills(self._session, sprite_id, skill_ids)
+            if count == 0:
+                QMessageBox.information(self, "提示", "选中的技能已全部绑定")
+            else:
+                sprite_name = self._bind_sprite_selector.currentText()
+                QMessageBox.information(self, "成功", f"已为「{sprite_name}」绑定 {count} 个技能")
+        except ValueError as e:
+            QMessageBox.warning(self, "警告", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"绑定失败：{e}")

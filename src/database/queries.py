@@ -148,3 +148,67 @@ def _get_sprite_skills(session: Session, sprite_id: int) -> list[SkillInfo]:
         )
         for s in skills
     ]
+
+
+def get_sprite_skill_ids(session: Session, sprite_id: int) -> list[int]:
+    """获取精灵当前绑定的所有技能ID
+
+    参数:
+        session: 数据库会话
+        sprite_id: 精灵ID
+
+    返回:
+        技能ID列表
+    """
+    stmt = select(SpriteSkill.skill_id).where(SpriteSkill.sprite_id == sprite_id)
+    return list(session.execute(stmt).scalars().all())
+
+
+def add_sprite_skills(session: Session, sprite_id: int, skill_ids: list[int]) -> int:
+    """为精灵增量添加技能（不删除已有技能）
+
+    参数:
+        session: 数据库会话
+        sprite_id: 精灵ID
+        skill_ids: 要添加的技能ID列表
+
+    返回:
+        实际添加的技能数量
+
+    特性:
+        - 幂等性：已存在的技能自动跳过
+        - 事务安全：失败时自动回滚
+        - 验证输入：检查精灵和技能是否存在
+    """
+    if not skill_ids:
+        return 0
+
+    # 验证精灵是否存在
+    sprite = session.get(Sprite, sprite_id)
+    if sprite is None:
+        raise ValueError(f"精灵ID {sprite_id} 不存在")
+
+    # 验证技能ID是否有效
+    valid_skill_ids = session.execute(
+        select(Skill.id).where(Skill.id.in_(skill_ids))
+    ).scalars().all()
+    invalid_ids = set(skill_ids) - set(valid_skill_ids)
+    if invalid_ids:
+        raise ValueError(f"技能ID不存在: {invalid_ids}")
+
+    # 获取已有技能ID，避免重复插入
+    existing_ids = set(get_sprite_skill_ids(session, sprite_id))
+    new_ids = [sid for sid in skill_ids if sid not in existing_ids]
+
+    if not new_ids:
+        return 0
+
+    try:
+        # 插入新的技能绑定
+        for sid in new_ids:
+            session.add(SpriteSkill(sprite_id=sprite_id, skill_id=sid))
+        session.commit()
+        return len(new_ids)
+    except Exception as e:
+        session.rollback()
+        raise RuntimeError(f"添加精灵技能失败: {e}")
