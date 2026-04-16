@@ -1,0 +1,12 @@
+[project]
+name = "roko-monitor"
+version = "0.1.0"
+description = "洛克王国世界 PVP 对战辅助工具"
+requires-python = ">=3.11"
+dependencies = [
+    "PyQt6>=6.6",
+    "SQLAlchemy>=2.0",
+]
+
+[project.scripts]
+roko-monitor = "src.main:main"

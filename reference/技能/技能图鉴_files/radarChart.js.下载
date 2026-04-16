@@ -1,0 +1,120 @@
+// radarChart.js
+const numSides = 6; // 定义六边形的边数
+
+function drawRadarChart(canvas, stats, maxValue = 350) {
+    const ctx = canvas.getContext('2d');
+    const labels = ['生命', '魔攻','魔防','速度', '物防',   '物攻'];
+    const dataValues = [stats.hp, stats.special_attack,stats.special_defense,stats.speed, stats.defense,   stats.attack];
+    const labelColors = [ 'grey', 'grey','grey','grey', 'grey',  'grey'];
+
+    // 自定义绘制雷达图
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    // 减小雷达图的半径
+    const radius = Math.min(canvas.width, canvas.height) / 2 - 30;
+
+    // 画雷达图的圆形网格
+    const numCircles = 3;
+    for (let i = 1; i <= numCircles; i++) {
+        const currentRadius = radius * (i / numCircles);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, currentRadius, 0, 2 * Math.PI);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    // 画雷达图的轴线
+    for (let i = 0; i < numSides; i++) {
+        const angle = (i / numSides) * 2 * Math.PI - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(centerX + radius * Math.cos(angle), centerY + radius * Math.sin(angle));
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    // 画数据点连线
+    ctx.beginPath();
+    for (let i = 0; i < numSides; i++) {
+        const angle = (i / numSides) * 2 * Math.PI - Math.PI / 2;
+        const value = dataValues[i];
+        const pointX = centerX + (radius * (value / maxValue)) * Math.cos(angle);
+        const pointY = centerY + (radius * (value / maxValue)) * Math.sin(angle);
+        if (i === 0) {
+            ctx.moveTo(pointX, pointY);
+        } else {
+            ctx.lineTo(pointX, pointY);
+        }
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(244, 195, 117, 1)';
+    ctx.strokeStyle = 'rgba(244, 195, 117, 1)';
+    ctx.fill();
+    ctx.stroke();
+
+    // 调整点的大小，这里设置点的半径
+    const pointRadius = 2; // 你可以修改这个值来调整点的大小
+
+    // 绘制数据顶点的点
+    for (let i = 0; i < numSides; i++) {
+        const angle = (i / numSides) * 2 * Math.PI - Math.PI / 2;
+        const value = dataValues[i];
+        const pointX = centerX + (radius * (value / maxValue)) * Math.cos(angle);
+        const pointY = centerY + (radius * (value / maxValue)) * Math.sin(angle);
+        ctx.fillStyle = labelColors[i];
+        ctx.beginPath();
+        ctx.arc(pointX, pointY, pointRadius, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    // 预加载图片并等待所有图片加载完成
+    const loadImage = (label) => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null); // 处理加载失败的情况
+            img.src = `tips/${label}.webp`;
+        });
+    };
+
+    Promise.all(labels.map(loadImage)).then(images => {
+        // 画标签
+        labels.forEach((label, index) => {
+            const angle = (index / labels.length) * 2 * Math.PI - Math.PI / 2;
+            // 调整标签的位置
+            let labelX = centerX + (radius + 8) * Math.cos(angle);
+            const labelY = centerY + (radius + 8) * Math.sin(angle);
+
+            // 设置图片大小
+            const imgSize = 16;
+            
+            // 如果是物防标签，调整X坐标
+            if (label === '物防') {
+                labelX -= imgSize;
+            }else if (label === '物攻') {
+                labelX -= imgSize;
+            }else if (label === '生命') {
+                labelX -= imgSize/2;
+            }else if (label === '速度') {
+                labelX -= imgSize/2;
+            }
+
+            // 绘制图片标签和数值在同一行
+            const img = images[index];
+            if (img) { // 只在图片成功加载时绘制
+                ctx.drawImage(img, labelX - imgSize/2, labelY - imgSize/2, imgSize, imgSize);
+            }
+
+            // 绘制数值
+            ctx.font = '12px Arial';
+            ctx.fillStyle = labelColors[index];
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            if (dataValues[index] !== undefined) {
+                ctx.fillText(dataValues[index].toString(), labelX + (img ? 16 : 0), labelY + (img ? 2 : 0));
+            }
+        });
+    });
+}

@@ -1,0 +1,250 @@
+/**
+ * 返回按钮模组样式
+ * 包含返回主页和返回顶部按钮的样式定义
+ * 适配小屏设备，固定在页面右下角
+ */
+
+/* 返回按钮容器 */
+.back-buttons-container {
+    position: fixed;
+    bottom: 80px;  /* 从20px调整到80px，向上移动60px */
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none; /* 容器本身不接收点击事件 */
+}
+
+/* 返回按钮基础样式 */
+.back-button {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: white;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    pointer-events: auto; /* 按钮本身接收点击事件 */
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+}
+
+/* 返回按钮悬停效果 */
+.back-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* 返回按钮点击效果 */
+.back-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* 返回上一页按钮样式 */
+.back-history-button {
+    background: linear-gradient(135deg, #6c757d, #adb5bd);
+}
+
+.back-history-button:hover {
+    background: linear-gradient(135deg, #5a6268, #6c757d);
+}
+
+/* 返回主页按钮样式 */
+.back-home-button {
+    background: linear-gradient(135deg, #ff6f61, #ff8a65);
+}
+
+.back-home-button:hover {
+    background: linear-gradient(135deg, #ff5722, #ff6f61);
+}
+
+/* 返回顶部按钮样式 */
+.back-top-button {
+    background: linear-gradient(135deg, #42a5f5, #1e88e5);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(20px);
+}
+
+.back-top-button.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.back-top-button:hover {
+    background: linear-gradient(135deg, #1e88e5, #1565c0);
+}
+
+/* 按钮图标样式 */
+.back-button i {
+    font-size: 20px;
+    transition: transform 0.3s ease;
+}
+
+.back-button:hover i {
+    transform: scale(1.1);
+}
+
+/* 工具提示样式 */
+.back-button::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    right: 60px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.back-button::after {
+    content: '';
+    position: absolute;
+    right: 50px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid rgba(0, 0, 0, 0.8);
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.back-button:hover::before,
+.back-button:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 小屏设备适配 */
+@media (max-width: 768px) {
+    .back-buttons-container {
+        bottom: 15px;
+        right: 15px;
+        gap: 8px;
+    }
+    
+    .back-button {
+        width: 45px;
+        height: 45px;
+        font-size: 16px;
+    }
+    
+    .back-button i {
+        font-size: 18px;
+    }
+    
+    /* 在小屏设备上隐藏工具提示 */
+    .back-button::before,
+    .back-button::after {
+        display: none;
+    }
+}
+
+/* 超小屏设备适配 */
+@media (max-width: 480px) {
+    .back-buttons-container {
+        bottom: 80px;
+        right: 10px;
+        gap: 6px;
+    }
+    
+    .back-button {
+        width: 40px;
+        height: 40px;
+        font-size: 14px;
+    }
+    
+    .back-button i {
+        font-size: 16px;
+    }
+}
+
+/* 动画关键帧 */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 初始化动画 */
+.back-buttons-container.animate-in .back-button {
+    animation: fadeInUp 0.5s ease forwards;
+}
+
+.back-buttons-container.animate-in .back-home-button {
+    animation-delay: 0.1s;
+}
+
+.back-buttons-container.animate-in .back-top-button {
+    animation-delay: 0.2s;
+}
+
+/* 深色模式适配 */
+@media (prefers-color-scheme: dark) {
+    .back-button::before {
+        background: rgba(255, 255, 255, 0.9);
+        color: #333;
+    }
+    
+    .back-button::after {
+        border-left-color: rgba(255, 255, 255, 0.9);
+    }
+}
+
+/* 高对比度模式适配 */
+@media (prefers-contrast: high) {
+    .back-button {
+        border: 2px solid #000;
+    }
+    
+    .back-home-button {
+        background: #ff0000;
+    }
+    
+    .back-top-button {
+        background: #1976d2;
+    }
+}
+
+/* 减少动画模式适配 */
+@media (prefers-reduced-motion: reduce) {
+    .back-button,
+    .back-button i,
+    .back-button::before,
+    .back-button::after {
+        transition: none;
+    }
+    
+    .back-button:hover {
+        transform: none;
+    }
+    
+    .back-buttons-container.animate-in .back-button {
+        animation: none;
+    }
+}

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(conda --version)",
+      "Bash(conda create *)",
+      "Bash(conda run *)",
+      "Bash(sqlite3 roko_monitor.db \".tables\")"
+    ]
+  }
+}

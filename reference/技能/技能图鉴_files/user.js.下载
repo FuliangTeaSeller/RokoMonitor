@@ -1,0 +1,875 @@
+$(document).ready(function () {
+    // 获取页面中的按钮元素
+    const loginBtn = document.getElementById('loginBtn');
+    const registerBtn = document.getElementById('registerBtn');
+    const usernameDisplay = document.getElementById('usernameDisplay');
+    const clearDataBtn = document.getElementById('clearDataBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    // 存储之前的 filteredData
+    let previousFilteredData = getFilteredLocalStorageData();
+
+     // 备份原始的 localStorage 方法
+    const originalSetItem = localStorage.setItem;
+    const originalRemoveItem = localStorage.removeItem;
+
+    /**
+     * 安全地重写localStorage方法，避免与其他模块冲突
+     * 如果方法已被重写，则使用事件监听器
+     */
+    // 使用独立的标记对象来避免污染localStorage
+    const localStorageOverrideFlags = {
+        setItemOverridden: false,
+        removeItemOverridden: false
+    };
+
+    /**
+     * 设置用户localStorage监听器
+     * 只监听包含'_'且值为'1'或''的键的变化，避免不必要的触发
+     * 使用独立标记避免localStorage污染
+     */
+    function setupUserLocalStorageListener() {
+        if (localStorageOverrideFlags.setItemOverridden) {
+            // 如果localStorage已被其他模块重写，使用事件监听
+            document.addEventListener('localStorageChange', function(e) {
+                if (e.detail && e.detail.key && e.detail.key.includes('_') && 
+                    (e.detail.action === 'setItem' || e.detail.action === 'removeItem')) {
+                    // 只处理包含'_'且值为'1'或''的键
+                    if (e.detail.action === 'setItem' && (e.detail.value === '1' || e.detail.value === '')) {
+                        handleLocalStorageChange();
+                    } else if (e.detail.action === 'removeItem') {
+                        handleLocalStorageChange();
+                    }
+                }
+            });
+        } else {
+            // 如果localStorage未被重写，进行重写
+            localStorage.setItem = function (key, value) {
+                const result = originalSetItem.apply(this, arguments);
+                // 只对包含'_'且值为'1'或''的键触发处理
+                if (key && key.includes('_') && (value === '1' || value === '')) {
+                    handleLocalStorageChange();
+                }
+                // 触发自定义事件，通知其他模块
+                document.dispatchEvent(new CustomEvent('localStorageChange', {
+                    detail: { key: key, value: value, action: 'setItem' }
+                }));
+                return result;
+            };
+            localStorageOverrideFlags.setItemOverridden = true;
+
+            localStorage.removeItem = function (key) {
+                const result = originalRemoveItem.apply(this, arguments);
+                // 只对包含'_'的键触发处理
+                if (key && key.includes('_')) {
+                    handleLocalStorageChange();
+                }
+                // 触发自定义事件，通知其他模块
+                document.dispatchEvent(new CustomEvent('localStorageChange', {
+                    detail: { key: key, action: 'removeItem' }
+                }));
+                return result;
+            };
+            localStorageOverrideFlags.removeItemOverridden = true;
+        }
+    }
+
+    /**
+     * 处理localStorage变化的统一函数
+     * 暴露到全局作用域以便其他模块调用
+     */
+    function handleLocalStorageChange() {
+        const currentFilteredData = getFilteredLocalStorageData();
+        if (isLoggedIn() && isDataDifferent(previousFilteredData, currentFilteredData)) {
+            // 这里发送数据到后台保存到 MySQL 数据库，需要使用 AJAX 请求，saveData.php 的后端脚本处理保存逻辑
+            const dataToSend = currentFilteredData;
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST','saveData.php', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    //console.log('数据已成功保存到数据库');
+                }
+            };
+            xhr.send(JSON.stringify(dataToSend));
+            previousFilteredData = currentFilteredData;
+        }
+    }
+
+    /**
+     * 清理localStorage中的污染数据
+     * 移除函数代码、对象和其他非预期内容
+     */
+    function cleanLocalStoragePollution() {
+        const keysToRemove = [];
+        
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const value = localStorage.getItem(key);
+            
+            // 检查是否为污染数据
+            if (value && typeof value === 'string') {
+                // 移除包含函数代码的项
+                if (value.startsWith('function') || 
+                    value.includes('_isOverridden') ||
+                    value.startsWith('[object') ||
+                    value.includes('apply(this, arguments)') ||
+                    value.includes('addEventListener') ||
+                    value.includes('dispatchEvent')) {
+                    keysToRemove.push(key);
+                }
+            }
+        }
+        
+        // 移除污染的键值对
+        keysToRemove.forEach(key => {
+            console.warn('清理localStorage污染数据:', key);
+            originalRemoveItem.call(localStorage, key);
+        });
+        
+        if (keysToRemove.length > 0) {
+            //console.log('已清理', keysToRemove.length, '个localStorage污染项');
+        }
+    }
+
+    // 清理localStorage污染
+    cleanLocalStoragePollution();
+    
+    // 初始化localStorage监听器
+    setupUserLocalStorageListener();
+    
+    // 将handleLocalStorageChange函数暴露到全局作用域，以便其他模块调用
+    window.handleLocalStorageChange = handleLocalStorageChange;
+
+    // 保持原有的removeItem逻辑用于删除存档功能
+     const userOriginalRemoveItem = originalRemoveItem;
+    
+    /**
+     * 获取过滤后的localStorage数据
+     * 只返回包含'_'且值为'1'或''的键，用于云存档
+     */
+    function getFilteredLocalStorageData() {
+        const filteredData = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const value = localStorage.getItem(key);
+            // 只记录包含'_'且值为'1'或''的键
+            if (key && key.includes('_') && (value === '1' || value === '')) {
+                filteredData[key] = value;
+            }
+        }
+        return {
+            username: getUsernameFromLocalStorageOrCookie(),
+            archive: JSON.stringify(filteredData)
+        };
+    }
+
+    // 删除存档按钮点击事件处理函数
+    // 检查删除存档按钮是否存在，如果不存在则跳过事件绑定
+    if (clearDataBtn) {
+        clearDataBtn.addEventListener('click', function () {
+		// 创建自定义对话框进行二次确认
+		const customDialog = document.createElement('div');
+		customDialog.style.position = 'fixed';
+		customDialog.style.top = '0';
+		customDialog.style.left = '0';
+		customDialog.style.width = '100%';
+		customDialog.style.height = '100%';
+		customDialog.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+		customDialog.style.display = 'flex';
+		customDialog.style.justifyContent = 'center';
+		customDialog.style.alignItems = 'center';
+		customDialog.style.zIndex = '9999';
+		customDialog.style.opacity = '0';
+		customDialog.style.transition = 'opacity 0.3s ease';
+		
+		// 设置淡入效果
+		setTimeout(() => {
+			customDialog.style.opacity = '1';
+		}, 10);
+		
+		const dialogContent = document.createElement('div');
+		dialogContent.style.backgroundColor = 'white';
+		dialogContent.style.padding = '25px';
+		dialogContent.style.borderRadius = '8px';
+		dialogContent.style.maxWidth = '400px';
+		dialogContent.style.width = '90%';
+		dialogContent.style.textAlign = 'center';
+		dialogContent.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.15)';
+		dialogContent.style.transform = 'translateY(20px)';
+		dialogContent.style.transition = 'transform 0.3s ease';
+		dialogContent.style.fontFamily = 'font, sans-serif';
+		
+		// 设置内容上移动画
+		setTimeout(() => {
+			dialogContent.style.transform = 'translateY(0)';
+		}, 10);
+		
+		// 添加标题
+		const title = document.createElement('h3');
+		title.textContent = '删除存档';
+		title.style.margin = '0 0 15px 0';
+		title.style.color = '#333';
+		title.style.fontSize = '18px';
+		
+		// 添加图标
+		const iconContainer = document.createElement('div');
+		iconContainer.style.marginBottom = '15px';
+		
+		const icon = document.createElement('div');
+		icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>';
+		
+		iconContainer.appendChild(icon);
+		
+		const message = document.createElement('p');
+		message.textContent = '确定删除本地存档吗？此操作不可恢复。';
+		message.style.margin = '0 0 20px 0';
+		message.style.color = '#666';
+		message.style.lineHeight = '1.5';
+		
+		const buttonContainer = document.createElement('div');
+		buttonContainer.style.marginTop = '25px';
+		buttonContainer.style.display = 'flex';
+		buttonContainer.style.justifyContent = 'space-around';
+		buttonContainer.style.gap = '15px';
+		
+		const confirmButton = document.createElement('button');
+		confirmButton.textContent = '确认删除';
+		confirmButton.style.padding = '10px 20px';
+		confirmButton.style.cursor = 'pointer';
+		confirmButton.style.backgroundColor = '#e74c3c';
+		confirmButton.style.color = 'white';
+		confirmButton.style.border = 'none';
+		confirmButton.style.borderRadius = '4px';
+		confirmButton.style.fontSize = '14px';
+		confirmButton.style.fontWeight = 'bold';
+		confirmButton.style.transition = 'background-color 0.2s ease';
+		confirmButton.style.flex = '1';
+		confirmButton.style.maxWidth = '140px';
+		
+		// 添加悬停效果
+		confirmButton.onmouseover = function() {
+			this.style.backgroundColor = '#c0392b';
+		};
+		confirmButton.onmouseout = function() {
+			this.style.backgroundColor = '#e74c3c';
+		};
+		
+		const cancelButton = document.createElement('button');
+		cancelButton.textContent = '取消';
+		cancelButton.style.padding = '10px 20px';
+		cancelButton.style.cursor = 'pointer';
+		cancelButton.style.backgroundColor = '#f5f5f5';
+		cancelButton.style.color = '#333';
+		cancelButton.style.border = '1px solid #ddd';
+		cancelButton.style.borderRadius = '4px';
+		cancelButton.style.fontSize = '14px';
+		cancelButton.style.fontWeight = 'bold';
+		cancelButton.style.transition = 'background-color 0.2s ease';
+		cancelButton.style.flex = '1';
+		cancelButton.style.maxWidth = '140px';
+		
+		// 添加悬停效果
+		cancelButton.onmouseover = function() {
+			this.style.backgroundColor = '#e8e8e8';
+		};
+		cancelButton.onmouseout = function() {
+			this.style.backgroundColor = '#f5f5f5';
+		};
+		
+		buttonContainer.appendChild(confirmButton);
+		buttonContainer.appendChild(cancelButton);
+		
+		dialogContent.appendChild(title);
+		dialogContent.appendChild(iconContainer);
+		dialogContent.appendChild(message);
+		dialogContent.appendChild(buttonContainer);
+		customDialog.appendChild(dialogContent);
+		
+		document.body.appendChild(customDialog);
+		
+		// 添加按钮事件，针对iOS环境优化事件处理
+		/**
+		 * 处理确认按钮点击事件
+		 * 安全地移除自定义对话框，避免重复移除导致的DOM错误
+		 */
+		const handleConfirm = function() {
+			// 检查customDialog是否仍然是document.body的子节点
+			if (customDialog && customDialog.parentNode === document.body) {
+				document.body.removeChild(customDialog);
+			}
+			// 确认删除后的逻辑
+			
+			// 使用原始的 removeItem 方法，避免触发 saveData.php
+			// 清空除登录信息外的数据
+			const keys = [];
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				// 保留 loggedInUser、userOpenid 和 userPhone，其他数据清除
+				if (key !== 'loggedInUser' && key !== 'userOpenid' && key !== 'userPhone') {
+					keys.push(key);
+				}
+			}
+			keys.forEach(key => {
+				userOriginalRemoveItem.call(localStorage, key); // 使用原始的 removeItem
+			});
+
+			// 清空数据后，可根据需要重新初始化页面相关显示等，比如重新初始化坐标标记等
+			InitMarkerLayer();
+			freshMarkerLayer();
+
+			// 同时清空服务器存档 (确保在所有本地删除操作完成后执行一次)
+			if (isLoggedIn()) {
+				const emptyArchive = {
+					username: getUsernameFromLocalStorageOrCookie(),
+					archive: JSON.stringify({})
+				};
+				const xhr = new XMLHttpRequest();
+				xhr.open('POST', 'saveData.php', true);
+				xhr.setRequestHeader('Content-Type', 'application/json');
+				xhr.onreadystatechange = function () {
+					if (xhr.readyState === 4 && xhr.status === 200) {
+						//console.log('服务器存档已成功清空');
+					}
+				};
+				xhr.send(JSON.stringify(emptyArchive));
+				// 更新 previousFilteredData 为空，避免后续误判
+				previousFilteredData = getFilteredLocalStorageData(); 
+			}
+		};
+		
+		/**
+		 * 处理取消按钮点击事件
+		 * 安全地移除自定义对话框，避免重复移除导致的DOM错误
+		 */
+		const handleCancel = function() {
+			// 检查customDialog是否仍然是document.body的子节点
+			if (customDialog && customDialog.parentNode === document.body) {
+				document.body.removeChild(customDialog);
+			}
+		};
+		
+		// 设置多种事件处理方式以确保iOS兼容性
+		confirmButton.onclick = handleConfirm;
+		confirmButton.addEventListener('click', handleConfirm);
+		confirmButton.addEventListener('touchend', handleConfirm);
+		
+		cancelButton.onclick = handleCancel;
+		cancelButton.addEventListener('click', handleCancel);
+		cancelButton.addEventListener('touchend', handleCancel);
+	});
+    } // 结束clearDataBtn存在性检查的if语句
+
+    /**
+     * 退出登录按钮点击事件处理函数
+     * 针对iOS环境优化事件处理
+     */
+    const handleLogout = function () {
+        // 发送请求到后端清除session
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'logout.php', true);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                // 清除所有用户相关的localStorage数据
+                localStorage.removeItem('loggedInUser');
+                localStorage.removeItem('userOpenid');
+                localStorage.removeItem('userPhone');
+                updateUsernameDisplay('游客');
+                // 显示登录和注册按钮
+                showLoginAndRegisterButtons();
+                // 隐藏用户中心和退出登录按钮
+                hideUserCenterButton();
+                if (logoutBtn) {
+                    logoutBtn.style.setProperty('display', 'none', 'important');
+                }
+            }
+        };
+        xhr.send();
+    };
+    
+    // 防重复触发的事件处理器包装函数
+    function createDebounceHandler(handler, delay = 300) {
+        let timeoutId = null;
+        let isProcessing = false;
+        
+        return function(event) {
+            // 如果正在处理中，直接返回
+            if (isProcessing) {
+                if (event && event.preventDefault) {
+                    event.preventDefault();
+                }
+                return;
+            }
+            
+            // 清除之前的定时器
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            
+            // 设置处理标志
+            isProcessing = true;
+            
+            // 执行处理函数
+            handler.call(this, event);
+            
+            // 延迟重置处理标志
+            timeoutId = setTimeout(() => {
+                isProcessing = false;
+                timeoutId = null;
+            }, delay);
+        };
+    }
+    
+    // 使用防重复触发机制绑定退出登录事件
+    const debouncedLogout = createDebounceHandler(handleLogout);
+    // 检查退出登录按钮是否存在，如果不存在则跳过事件绑定
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', debouncedLogout);
+        logoutBtn.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            debouncedLogout(e);
+        });
+    }
+
+    /**
+     * 检查是否登录
+     * 根据localStorage中的userOpenid或loggedInUser判断是否登录
+     */
+    function isLoggedIn() {
+        const userOpenid = localStorage.getItem('userOpenid');
+        const loggedInUser = localStorage.getItem('loggedInUser');
+        return userOpenid || loggedInUser;
+    }
+
+    function getUsernameFromLocalStorageOrCookie() {
+        // 优先使用localStorage中的userOpenid，如果不存在则使用loggedInUser
+        const userOpenid = localStorage.getItem('userOpenid');
+        const loggedInUser = localStorage.getItem('loggedInUser');
+        return userOpenid || loggedInUser || '';
+    }
+
+    function checkLocalStorageAndArchive(username) {
+        // 这里发送请求到后端获取该用户的存档数据，getArchive.php 的后端脚本返回对应存档数据
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'getArchive.php', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                const userArchive = JSON.parse(xhr.responseText);
+                const localStorageData = getFilteredLocalStorageDataForComparison();
+                const userArchiveData = JSON.parse(userArchive.archive);
+                if (isDataDifferent(localStorageData, userArchiveData)) {
+                    // 创建自定义对话框
+                    const customDialog = document.createElement('div');
+                    customDialog.style.position = 'fixed';
+                    customDialog.style.top = '0';
+                    customDialog.style.left = '0';
+                    customDialog.style.width = '100%';
+                    customDialog.style.height = '100%';
+                    customDialog.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                    customDialog.style.display = 'flex';
+                    customDialog.style.justifyContent = 'center';
+                    customDialog.style.alignItems = 'center';
+                    customDialog.style.zIndex = '9999';
+                    customDialog.style.opacity = '0';
+                    customDialog.style.transition = 'opacity 0.3s ease';
+                    
+                    // 设置淡入效果
+                    setTimeout(() => {
+                        customDialog.style.opacity = '1';
+                    }, 10);
+                    
+                    const dialogContent = document.createElement('div');
+                    dialogContent.style.backgroundColor = 'white';
+                    dialogContent.style.padding = '25px';
+                    dialogContent.style.borderRadius = '8px';
+                    dialogContent.style.maxWidth = '400px';
+                    dialogContent.style.width = '90%';
+                    dialogContent.style.textAlign = 'center';
+                    dialogContent.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.15)';
+                    dialogContent.style.transform = 'translateY(20px)';
+                    dialogContent.style.transition = 'transform 0.3s ease';
+                    dialogContent.style.fontFamily = 'font, sans-serif';
+                    
+                    // 设置内容上移动画
+                    setTimeout(() => {
+                        dialogContent.style.transform = 'translateY(0)';
+                    }, 10);
+                    
+                    // 添加标题
+                    const title = document.createElement('h3');
+                    title.textContent = '存档选择';
+                    title.style.margin = '0 0 15px 0';
+                    title.style.color = '#333';
+                    title.style.fontSize = '18px';
+                    
+                    // 添加图标
+                    const iconContainer = document.createElement('div');
+                    iconContainer.style.marginBottom = '15px';
+                    
+                    const icon = document.createElement('div');
+                    icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#4a90e2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>';
+                    
+                    iconContainer.appendChild(icon);
+                    
+                    const message = document.createElement('p');
+                    message.textContent = '本地云存档数据不一致，请选择使用哪个存档：';
+                    message.style.margin = '0 0 20px 0';
+                    message.style.color = '#666';
+                    message.style.lineHeight = '1.5';
+                    
+                    const buttonContainer = document.createElement('div');
+                    buttonContainer.style.marginTop = '25px';
+                    buttonContainer.style.display = 'flex';
+                    buttonContainer.style.justifyContent = 'space-around';
+                    buttonContainer.style.gap = '15px';
+                    
+                    const localButton = document.createElement('button');
+                    localButton.textContent = '本地数据';
+                    localButton.style.padding = '10px 20px';
+                    localButton.style.cursor = 'pointer';
+                    localButton.style.backgroundColor = '#4a90e2';
+                    localButton.style.color = 'white';
+                    localButton.style.border = 'none';
+                    localButton.style.borderRadius = '4px';
+                    localButton.style.fontSize = '14px';
+                    localButton.style.fontWeight = 'bold';
+                    localButton.style.transition = 'background-color 0.2s ease';
+                    localButton.style.flex = '1';
+                    localButton.style.maxWidth = '140px';
+                    
+                    // 添加悬停效果
+                    localButton.onmouseover = function() {
+                        this.style.backgroundColor = '#3a80d2';
+                    };
+                    localButton.onmouseout = function() {
+                        this.style.backgroundColor = '#4a90e2';
+                    };
+                    
+                    const cloudButton = document.createElement('button');
+                    cloudButton.textContent = '云端数据';
+                    cloudButton.style.padding = '10px 20px';
+                    cloudButton.style.cursor = 'pointer';
+                    cloudButton.style.backgroundColor = '#f5f5f5';
+                    cloudButton.style.color = '#333';
+                    cloudButton.style.border = '1px solid #ddd';
+                    cloudButton.style.borderRadius = '4px';
+                    cloudButton.style.fontSize = '14px';
+                    cloudButton.style.fontWeight = 'bold';
+                    cloudButton.style.transition = 'background-color 0.2s ease';
+                    cloudButton.style.flex = '1';
+                    cloudButton.style.maxWidth = '140px';
+                    
+                    // 添加悬停效果
+                    cloudButton.onmouseover = function() {
+                        this.style.backgroundColor = '#e8e8e8';
+                    };
+                    cloudButton.onmouseout = function() {
+                        this.style.backgroundColor = '#f5f5f5';
+                    };
+                    
+                    buttonContainer.appendChild(localButton);
+                    buttonContainer.appendChild(cloudButton);
+                    
+                    dialogContent.appendChild(title);
+                    dialogContent.appendChild(iconContainer);
+                    dialogContent.appendChild(message);
+                    dialogContent.appendChild(buttonContainer);
+                    customDialog.appendChild(dialogContent);
+                    
+                    document.body.appendChild(customDialog);
+                    
+                    // 使用Promise处理用户选择，针对iOS环境优化事件处理
+                    new Promise((resolve) => {
+                        // 为iOS兼容性，同时使用onclick和addEventListener
+                        /**
+                         * 处理选择本地数据的事件
+                         * 安全地移除自定义对话框，避免重复移除导致的DOM错误
+                         */
+                        const handleLocalChoice = function() {
+                            // 检查customDialog是否仍然是document.body的子节点
+                            if (customDialog && customDialog.parentNode === document.body) {
+                                document.body.removeChild(customDialog);
+                            }
+                            resolve(true); // 选择本地数据
+                        };
+                        
+                        /**
+                         * 处理选择云端数据的事件
+                         * 安全地移除自定义对话框，避免重复移除导致的DOM错误
+                         */
+                        const handleCloudChoice = function() {
+                            // 检查customDialog是否仍然是document.body的子节点
+                            if (customDialog && customDialog.parentNode === document.body) {
+                                document.body.removeChild(customDialog);
+                            }
+                            resolve(false); // 选择云端数据
+                        };
+                        
+                        // 设置多种事件处理方式以确保iOS兼容性
+                        localButton.onclick = handleLocalChoice;
+                        localButton.addEventListener('click', handleLocalChoice);
+                        localButton.addEventListener('touchend', handleLocalChoice);
+                        
+                        cloudButton.onclick = handleCloudChoice;
+                        cloudButton.addEventListener('click', handleCloudChoice);
+                        cloudButton.addEventListener('touchend', handleCloudChoice);
+                    }).then(choice => {
+                        if (choice) {
+                            // 发送请求到后端用本地覆盖数据库存档， updateArchive.php 的后端脚本处理更新逻辑
+                            updateArchiveInBackend(username, JSON.stringify(localStorageData));
+                        } else {
+                            // 清空本地存档，为覆盖做准备
+                            const keysToClear = [];
+                            for (let i = 0; i < localStorage.length; i++) {
+                                const key = localStorage.key(i);
+                                // 保留 loggedInUser、userOpenid 和 userPhone，其他存档相关数据清除
+                                if (key !== 'loggedInUser' && key !== 'userOpenid' && key !== 'userPhone') {
+                                    keysToClear.push(key);
+                                }
+                            }
+                            // 暂时恢复原始的 removeItem 方法，避免重复触发 saveData.php
+                            const originalRemoveItemFunc = localStorage.removeItem;
+                            localStorage.removeItem = originalRemoveItem;
+                            keysToClear.forEach(key => {
+                                localStorage.removeItem(key); // 使用原始的 removeItem
+                            });
+                            // 恢复重写的 removeItem 方法
+                            localStorage.removeItem = originalRemoveItemFunc;
+
+                            // 用数据库存档覆盖本地 localStorage
+                            // 暂时恢复原始的 setItem 方法，避免重复触发 saveData.php
+                            const originalSetItemFunc = localStorage.setItem;
+                            localStorage.setItem = originalSetItem;
+
+                            for (const key in userArchiveData) {
+                                localStorage.setItem(key, userArchiveData[key]); // 使用原始的 setItem
+                            }
+
+                            // 恢复重写的 setItem 方法
+                            localStorage.setItem = originalSetItemFunc;
+
+                            // 可根据需要刷新页面相关显示等
+                            InitMarkerLayer();
+                            freshMarkerLayer();
+                            
+                            // 手动触发数量统计更新（因为使用了原始localStorage方法绕过了监听器）
+                            if (typeof updateCompletedCounts === 'function') {
+                                setTimeout(updateCompletedCounts, 200);
+                            }
+
+                            // 更新 previousFilteredData 以反映本地数据已与云端同步
+                            previousFilteredData = getFilteredLocalStorageData();
+                        }
+                    });
+                }
+            }
+        };
+        const data = {
+            username: username
+        };
+        xhr.send(JSON.stringify(data));
+    }
+    
+    /**
+     * 获取过滤后的localStorage数据用于比较
+     * 排除系统保留键和函数属性，防止localStorage污染
+     */
+    function getFilteredLocalStorageDataForComparison() {
+        const filteredData = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const value = localStorage.getItem(key);
+            
+            // 排除系统保留键
+            if (key === 'layerNumber' || 
+                key === 'loggedInUser' || 
+                key === 'NetSync' || 
+                key === 'userOpenid' || 
+                key === 'userPhone') {
+                continue;
+            }
+            
+            // 排除函数和对象类型的值，防止localStorage污染
+            if (typeof value === 'string' && 
+                !value.startsWith('function') && 
+                !value.startsWith('[object') && 
+                !value.includes('_isOverridden') &&
+                value !== 'undefined' &&
+                value !== 'null') {
+                filteredData[key] = value;
+            }
+        }
+        return filteredData;
+    }
+    
+    function isDataDifferent(localData, archiveData) {
+        const localKeys = Object.keys(localData);
+        const archiveKeys = Object.keys(archiveData);
+        if (localKeys.length!== archiveKeys.length) {
+            return true;
+        }
+        for (const key of localKeys) {
+            if (localData[key]!== archiveData[key]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function updateArchiveInBackend(username, data) {
+        // 发送请求到后端更新存档数据，使用 updateArchive.php 脚本
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'updateArchive.php', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                //console.log('存档已成功更新');
+            }
+        };
+        const updateData = {
+            username: username,
+            archive: data
+        };
+        xhr.send(JSON.stringify(updateData));
+    }
+
+    // 页面加载时检查登录状态
+    checkLoginStatus();
+
+    // formatPhoneNumber函数已删除：login.php已处理手机号格式化
+
+    /**
+     * 获取显示用户名
+     * 有userOpenid时显示loggedInUser，如果没有loggedInUser就显示userPhone
+     * 没有userOpenid时显示loggedInUser或游客
+     */
+    function getDisplayUsername() {
+        const userOpenid = localStorage.getItem('userOpenid');
+        const loggedInUser = localStorage.getItem('loggedInUser');
+        const userPhone = localStorage.getItem('userPhone');
+        
+        if (userOpenid) {
+            // 有openid时，优先显示loggedInUser，没有则显示userPhone
+            return loggedInUser || userPhone || userOpenid;
+        } else {
+            // 没有openid时，显示loggedInUser或游客
+            return loggedInUser || '游客';
+        }
+    }
+
+    /**
+     * 更新用户名显示，保留箭头图标
+     * @param {string} username - 要显示的用户名
+     */
+    /**
+     * 更新用户名显示
+     * 限制显示最多4个字符，超过部分用省略号表示
+     * @param {string} username - 用户名
+     */
+    /**
+     * 更新用户名显示
+     * 只更新用户名文本内容，不处理箭头图标（箭头图标在HTML中已存在）
+     * @param {string} username - 要显示的用户名
+     */
+    function updateUsernameDisplay(username) {
+        if (usernameDisplay) {
+            // 限制用户名显示长度，最多4个字符
+            let displayName = username;
+            if (username && username.length > 3) {
+                displayName = username.substring(0, 3) + '..';
+            }
+            
+            // 只更新文本内容，不处理箭头图标
+            // 箭头图标已在HTML中定义为兄弟元素
+            usernameDisplay.textContent = displayName;
+        } 
+    }
+
+    /**
+     * 检查用户登录状态
+     * 根据localStorage中的userOpenid或loggedInUser判断是否登录
+     */
+    function checkLoginStatus() {
+        const userOpenid = localStorage.getItem('userOpenid');
+        const loggedInUser = localStorage.getItem('loggedInUser');
+        const isLoggedIn = userOpenid || loggedInUser;
+        
+        
+        if (isLoggedIn) {
+            //console.log('用户已登录，显示用户中心按钮');
+            updateUsernameDisplay(getDisplayUsername());
+            // 隐藏登录和注册按钮
+            hideLoginAndRegisterButtons();
+            // 显示用户中心和退出登录按钮
+            showUserCenterButton();
+            if (logoutBtn) {
+                logoutBtn.style.setProperty('display', 'block', 'important');
+            }
+            // 触发存档判断，使用优先级用户标识
+            const userIdentifier = getUsernameFromLocalStorageOrCookie();
+            //checkLocalStorageAndArchive(userIdentifier);
+        } else {
+            //console.log('用户未登录，显示登录注册按钮');
+            updateUsernameDisplay('游客');
+            // 显示登录和注册按钮
+            showLoginAndRegisterButtons();
+            // 隐藏用户中心和退出登录按钮
+            hideUserCenterButton();
+            if (logoutBtn) {
+                logoutBtn.style.setProperty('display', 'none', 'important');
+            }
+        }
+    }
+
+    /**
+     * 隐藏登录和注册按钮
+     */
+    function hideLoginAndRegisterButtons() {
+        //console.log('hideLoginAndRegisterButtons - 隐藏登录注册按钮');
+        if (loginBtn) {
+            loginBtn.style.setProperty('display', 'none', 'important');
+            //console.log('loginBtn 已隐藏');
+        }
+        if (registerBtn) {
+            registerBtn.style.setProperty('display', 'none', 'important');
+            //console.log('registerBtn 已隐藏');
+        }
+    }
+
+    /**
+     * 显示登录和注册按钮
+     */
+    function showLoginAndRegisterButtons() {
+       // console.log('showLoginAndRegisterButtons - 显示登录注册按钮');
+        if (loginBtn) {
+            loginBtn.style.setProperty('display', 'block', 'important');
+            //console.log('loginBtn 已显示');
+        }
+        if (registerBtn) {
+            registerBtn.style.setProperty('display', 'block', 'important');
+            //console.log('registerBtn 已显示');
+        }
+    }
+
+    /**
+     * 显示用户中心按钮
+     */
+    function showUserCenterButton() {
+        const userCenterBtn = document.getElementById('userCenterBtn');
+        if (userCenterBtn) userCenterBtn.style.setProperty('display', 'block', 'important');
+    }
+
+    /**
+     * 隐藏用户中心按钮
+     */
+    function hideUserCenterButton() {
+        const userCenterBtn = document.getElementById('userCenterBtn');
+        if (userCenterBtn) userCenterBtn.style.setProperty('display', 'none', 'important');
+    }
+});
+
+// 关闭表单的函数
+function closeForm(formId) {
+    const form = document.getElementById(formId);
+    form.style.display = 'none';
+}

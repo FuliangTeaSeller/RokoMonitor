@@ -1,0 +1,308 @@
+/**
+ * 返回按钮模组JavaScript功能
+ * 提供返回主页和返回顶部的交互功能
+ * 包含滚动检测、即时滚动等功能
+ * 适配通用版本使用
+ */
+
+(function() {
+    'use strict';
+    
+    // 模组配置（将由PHP动态更新）
+    const CONFIG = {
+        // 显示返回顶部按钮的滚动距离阈值
+        scrollThreshold: 300,
+        // 节流函数延迟时间（毫秒）
+        throttleDelay: 100,
+        // 主页URL（由PHP动态设置）
+        homeUrl: 'index.php',
+        // 是否启用调试模式
+        debug: false
+    };
+    
+    // 模组状态
+    let isInitialized = false;
+    let backTopButton = null;
+    let backHomeButton = null;
+    let backHistoryButton = null;
+    let container = null;
+    
+    /**
+     * 调试日志输出
+     * @param {string} message - 日志消息
+     * @param {*} data - 附加数据
+     */
+    function debugLog(message, data = null) {
+        if (CONFIG.debug) {
+            console.log(`[BackButtons] ${message}`, data || '');
+        }
+    }
+    
+    /**
+     * 节流函数
+     * @param {Function} func - 要节流的函数
+     * @param {number} delay - 延迟时间
+     * @returns {Function} 节流后的函数
+     */
+    function throttle(func, delay) {
+        let timeoutId;
+        let lastExecTime = 0;
+        
+        return function(...args) {
+            const currentTime = Date.now();
+            
+            if (currentTime - lastExecTime > delay) {
+                func.apply(this, args);
+                lastExecTime = currentTime;
+            } else {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    func.apply(this, args);
+                    lastExecTime = Date.now();
+                }, delay - (currentTime - lastExecTime));
+            }
+        };
+    }
+    
+    /**
+     * 立即滚动到顶部
+     */
+    function smoothScrollToTop() {
+        debugLog('立即滚动到顶部');
+        window.scrollTo(0, 0);
+    }
+    
+    /**
+     * 返回主页
+     */
+    function goToHome() {
+        debugLog('返回主页', { url: CONFIG.homeUrl });
+
+        // 优先尝试调用父级的关闭模态框方法 (最直接)
+        try {
+            if (window.parent && window.parent.closeDetailModal) {
+                window.parent.closeDetailModal();
+                return;
+            }
+        } catch (e) {
+            console.error('Parent access error:', e);
+        }
+
+        // 如果在iframe中，调用父级返回以关闭模态框 (后备方案)
+        try {
+            if (window.self !== window.top) {
+                window.parent.history.back();
+                return;
+            }
+        } catch (e) {
+            console.error('Iframe access error:', e);
+        }
+
+        // 尝试保存状态 (如果在 index.php 上且存在保存函数)
+        if (typeof window.saveIndexState === 'function') {
+            try {
+                window.saveIndexState();
+            } catch (e) {
+                console.error('保存状态失败:', e);
+            }
+        }
+        
+        // 检查是否已经在主页
+        if (window.location.pathname.endsWith('index.php')) {
+            debugLog('已经在主页，滚动到顶部');
+            smoothScrollToTop();
+            return;
+        }
+
+        // 如果来源是主页，尝试使用 history.back() 以保留状态
+        // 注意：需要确保 referrer 确实是主页
+        if (document.referrer && document.referrer.includes(CONFIG.homeUrl)) {
+            debugLog('来源是主页，尝试返回');
+            window.history.back();
+            return;
+        }
+        
+        // 跳转到主页
+        window.location.href = CONFIG.homeUrl;
+    }
+    
+    /**
+     * 处理滚动事件
+     */
+    function handleScroll() {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const shouldShow = scrollTop > CONFIG.scrollThreshold;
+        
+        if (backTopButton) {
+            if (shouldShow) {
+                backTopButton.classList.add('show');
+            } else {
+                backTopButton.classList.remove('show');
+            }
+        }
+        
+        debugLog('滚动位置', { scrollTop, shouldShow });
+    }
+    
+    /**
+     * 创建返回按钮HTML结构
+     * @returns {HTMLElement} 返回按钮容器元素
+     */
+    function createButtonsHTML() {
+        // 检测是否在首页
+        const isIndex = window.location.pathname.endsWith('index.php') || window.location.pathname.endsWith('/');
+
+        const container = document.createElement('div');
+        container.className = 'back-buttons-container';
+        
+        let buttonsHtml = '';
+        
+        if (!isIndex) {
+            buttonsHtml += `
+            <button class="back-button back-history-button" 
+                    data-tooltip="返回上一页" 
+                    aria-label="返回上一页">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <button class="back-button back-home-button" 
+                    data-tooltip="返回主页" 
+                    aria-label="返回主页">
+                <i class="fas fa-home"></i>
+            </button>`;
+        }
+        
+        buttonsHtml += `
+            <button class="back-button back-top-button" 
+                    data-tooltip="返回顶部" 
+                    aria-label="返回顶部">
+                <i class="fas fa-chevron-up"></i>
+            </button>
+        `;
+        
+        container.innerHTML = buttonsHtml;
+        
+        return container;
+    }
+    
+    /**
+     * 绑定事件监听器
+     */
+    function bindEventListeners() {
+        // 返回上一页按钮点击事件
+        if (backHistoryButton) {
+            backHistoryButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // 优先尝试调用父级的关闭模态框方法
+                try {
+                    if (window.parent && window.parent.closeDetailModal) {
+                        window.parent.closeDetailModal();
+                        return;
+                    }
+                } catch (e) {
+                    console.error('Parent access error:', e);
+                }
+
+                // 后备：如果在iframe中，调用父级返回
+                try {
+                    if (window.self !== window.top) {
+                        window.parent.history.back();
+                    } else {
+                        window.history.back();
+                    }
+                } catch (e) {
+                    window.history.back();
+                }
+            });
+        }
+
+        // 返回主页按钮点击事件
+        if (backHomeButton) {
+            backHomeButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                goToHome();
+            });
+        }
+        
+        // 返回顶部按钮点击事件
+        if (backTopButton) {
+            backTopButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                smoothScrollToTop();
+            });
+        }
+        
+        // 滚动事件监听（使用节流）
+        const throttledScrollHandler = throttle(handleScroll, CONFIG.throttleDelay);
+        window.addEventListener('scroll', throttledScrollHandler, { passive: true });
+        
+        debugLog('事件监听器绑定完成');
+    }
+    
+    /**
+     * 初始化返回按钮模组
+     * @param {Object} options - 配置选项
+     */
+    function init(options = {}) {
+        if (isInitialized) {
+            debugLog('模组已经初始化');
+            return;
+        }
+        
+        // 合并配置
+        Object.assign(CONFIG, options);
+        
+        debugLog('开始初始化返回按钮模组', CONFIG);
+        
+        try {
+            // 创建按钮容器
+            container = createButtonsHTML();
+            document.body.appendChild(container);
+            
+            // 获取按钮元素引用
+            backHistoryButton = container.querySelector('.back-history-button');
+            backHomeButton = container.querySelector('.back-home-button');
+            backTopButton = container.querySelector('.back-top-button');
+            
+            // 绑定事件监听器
+            bindEventListeners();
+            
+            // 初始化滚动状态
+            handleScroll();
+            
+            isInitialized = true;
+            debugLog('返回按钮模组初始化完成');
+            
+        } catch (error) {
+            console.error('[BackButtons] 初始化失败:', error);
+        }
+    }
+    
+    /**
+     * 更新配置（供PHP调用）
+     * @param {Object} newConfig - 新的配置选项
+     */
+    function updateConfig(newConfig) {
+        Object.assign(CONFIG, newConfig);
+        debugLog('配置已更新', CONFIG);
+    }
+    
+    // 自动初始化（当DOM加载完成时）
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        // DOM已经加载完成，立即初始化
+        init();
+    }
+    
+    // 导出公共API（供PHP和外部调用）
+    window.BackButtons = {
+        init,
+        updateConfig,
+        goToHome,
+        smoothScrollToTop
+    };
+    
+    debugLog('返回按钮模组脚本加载完成');
+    
+})();
