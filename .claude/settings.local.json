@@ -4,7 +4,11 @@
       "Bash(conda --version)",
       "Bash(conda create *)",
       "Bash(conda run *)",
-      "Bash(sqlite3 roko_monitor.db \".tables\")"
+      "Bash(sqlite3 roko_monitor.db \".tables\")",
+      "Bash(grep -E \"^[^a-z].*\\\\.webp$\")",
+      "Bash(conda activate *)",
+      "Bash(python tools/import_skills_from_html.py)",
+      "Bash(grep \"\\\\.png$\")"
     ]
   }
 }
