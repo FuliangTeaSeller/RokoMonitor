@@ -257,14 +257,42 @@ class EntryDialog(QDialog):
         self._selected_sprite_label.setText(f"当前选中：{sprite_name}")
         self._selected_sprite_label.setStyleSheet("color: #89b4fa; font-weight: bold;")
 
-        # 获取该精灵已有技能ID并高亮
+        # 获取该精灵已有技能ID
         existing_skill_ids = get_sprite_skill_ids(self._session, sprite_id)
-        self._bind_skill_list.clearSelection()
-        for i in range(self._bind_skill_list.count()):
-            item = self._bind_skill_list.item(i)
+
+        # 重排序技能列表（已绑定技能移到顶部）并设置选中状态
+        self._reorder_skill_list(existing_skill_ids)
+
+    def _reorder_skill_list(self, existing_skill_ids: list[int]):
+        """重排序技能列表，将已绑定技能移到顶部并选中"""
+        existing_set = set(existing_skill_ids)
+
+        # 收集所有项目（使用 takeItem 移除）
+        all_items = []
+        while self._bind_skill_list.count() > 0:
+            all_items.append(self._bind_skill_list.takeItem(0))
+
+        # 分离已绑定和未绑定项目
+        bound_items = []
+        unbound_items = []
+        for item in all_items:
             skill_id = item.data(Qt.ItemDataRole.UserRole)
-            if skill_id in existing_skill_ids:
-                item.setSelected(True)
+            if skill_id in existing_set:
+                bound_items.append(item)
+            else:
+                unbound_items.append(item)
+
+        # 先添加已绑定技能并选中
+        for item in bound_items:
+            self._bind_skill_list.addItem(item)
+            item.setSelected(True)
+
+        # 再添加未绑定技能
+        for item in unbound_items:
+            self._bind_skill_list.addItem(item)
+
+        # 滚动到顶部
+        self._bind_skill_list.scrollToTop()
 
     def _filter_skill_list(self, text: str):
         """过滤技能列表"""
