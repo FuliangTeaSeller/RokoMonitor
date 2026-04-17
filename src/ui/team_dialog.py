@@ -5,7 +5,8 @@ from typing import Optional
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QRadioButton, QButtonGroup, QSpinBox, QScrollArea, QWidget,
-    QGridLayout, QMessageBox, QFrame, QFrame as QtFrame
+    QGridLayout, QMessageBox, QFrame, QFrame as QtFrame, QLineEdit,
+    QListWidget, QListWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QPixmap, QImage
@@ -13,7 +14,7 @@ import numpy as np
 
 from sqlalchemy.orm import Session
 
-from src.database.queries import get_sprite_detail_by_name, SpriteInfo, SkillInfo
+from src.database.queries import get_sprite_detail_by_name, get_sprite_detail, search_sprites_by_name, SpriteInfo, SkillInfo
 from src.config import CAPTURE_REGIONS, OCR_CONFIG
 from src.capture.screen_capture import ScreenCapture
 from src.ocr.engine import OCREngine
@@ -22,6 +23,171 @@ from src.ui.image_utils import load_icon
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+
+class SpriteSearchDialog(QDialog):
+    """精灵搜索对话框（带自动补全）"""
+
+    def __init__(self, session: Session, parent=None):
+        super().__init__(parent)
+        self.session = session
+        self._selected_sprite: Optional[SpriteInfo] = None
+        self._init_ui()
+
+    def _init_ui(self):
+        self.setWindowTitle("选择精灵")
+        self.setFixedSize(400, 500)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1e1e2e;
+                color: #cdd6f4;
+            }
+            QLabel {
+                color: #cdd6f4;
+                background: transparent;
+            }
+            QLineEdit {
+                background-color: #313244;
+                color: #cdd6f4;
+                border: 2px solid #45475a;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border-color: #89b4fa;
+            }
+            QListWidget {
+                background-color: #181825;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                border-radius: 6px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #313244;
+            }
+            QListWidget::item:selected {
+                background-color: #45475a;
+                color: #cdd6f4;
+            }
+            QListWidget::item:hover {
+                background-color: #313244;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        # 标题
+        title = QLabel("输入精灵名称或拼音首字母")
+        title.setFont(QFont("Microsoft YaHei", 12, QFont.Weight.Bold))
+        layout.addWidget(title)
+
+        # 搜索输入框
+        self._search_input = QLineEdit()
+        self._search_input.setPlaceholderText("例如：火花 或 hs")
+        self._search_input.textChanged.connect(self._on_search)
+        layout.addWidget(self._search_input)
+
+        # 搜索结果列表
+        self._result_list = QListWidget()
+        self._result_list.itemDoubleClicked.connect(self._on_item_double_clicked)
+        layout.addWidget(self._result_list)
+
+        # 按钮
+        btn_layout = QHBoxLayout()
+        self._confirm_btn = QPushButton("确认")
+        self._confirm_btn.setEnabled(False)
+        self._confirm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 24px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #b4befe;
+            }
+            QPushButton:disabled {
+                background-color: #45475a;
+                color: #6c7086;
+            }
+        """)
+        self._confirm_btn.clicked.connect(self.accept)
+
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 24px;
+            }
+            QPushButton:hover {
+                background-color: #585b70;
+            }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(self._confirm_btn)
+        layout.addLayout(btn_layout)
+
+        # 列表选择事件
+        self._result_list.itemSelectionChanged.connect(self._on_selection_changed)
+
+        # 初始加载所有精灵
+        self._load_all_sprites()
+
+    def _load_all_sprites(self):
+        """加载所有精灵"""
+        results = search_sprites_by_name(self.session, "")
+        self._display_results(results)
+
+    def _on_search(self, text: str):
+        """搜索输入变化"""
+        keyword = text.strip()
+        if keyword:
+            results = search_sprites_by_name(self.session, keyword)
+        else:
+            results = search_sprites_by_name(self.session, "")
+        self._display_results(results)
+
+    def _display_results(self, sprites: list[SpriteInfo]):
+        """显示搜索结果"""
+        self._result_list.clear()
+        for sprite in sprites:
+            item = QListWidgetItem(f"{sprite.name}  ({' / '.join(sprite.attributes) if sprite.attributes else '未知'})")
+            item.setData(Qt.ItemDataRole.UserRole, sprite)
+            self._result_list.addItem(item)
+
+    def _on_selection_changed(self):
+        """列表选择变化"""
+        selected = self._result_list.selectedItems()
+        self._confirm_btn.setEnabled(len(selected) > 0)
+
+    def _on_item_double_clicked(self, item: QListWidgetItem):
+        """双击选择"""
+        self.accept()
+
+    def accept(self):
+        """确认选择"""
+        selected = self._result_list.selectedItems()
+        if selected:
+            basic_info = selected[0].data(Qt.ItemDataRole.UserRole)
+            # 获取完整信息（包含技能）
+            self._selected_sprite = get_sprite_detail(self.session, basic_info.id)
+        super().accept()
+
+    def get_selected_sprite(self) -> Optional[SpriteInfo]:
+        """获取选中的精灵"""
+        return self._selected_sprite
 
 
 class SkillDetailItem(QPushButton):
@@ -584,15 +750,12 @@ class TeamRecognitionDialog(QDialog):
         if self._selected_slot < 0:
             return
 
-        from PyQt6.QtWidgets import QInputDialog
-        name, ok = QInputDialog.getText(self, "手动输入", "请输入精灵名称：")
-        if ok and name.strip():
-            sprite_info = get_sprite_detail_by_name(self.session, name.strip())
+        dialog = SpriteSearchDialog(self.session, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            sprite_info = dialog.get_selected_sprite()
             if sprite_info:
                 self._sprite_rows[self._selected_slot].set_sprite(sprite_info)
                 self._update_status(f"槽位 {self._selected_slot + 1} 已设置为 {sprite_info.name}")
-            else:
-                QMessageBox.warning(self, "未找到", f"数据库中未找到精灵：{name}")
 
     def _on_start_clicked(self):
         """开始识别按钮点击"""
