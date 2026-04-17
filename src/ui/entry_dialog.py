@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import (
     QWidget, QLineEdit, QComboBox, QSpinBox, QTextEdit,
     QListWidget, QListWidgetItem, QPushButton, QLabel, QMessageBox,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QStringListModel
+from PyQt6.QtWidgets import QCompleter
 
 from sqlalchemy.orm import Session
 
@@ -169,18 +170,62 @@ class EntryDialog(QDialog):
     def _build_bind_tab(self) -> QWidget:
         """构建精灵-技能绑定标签页"""
         widget = QWidget()
-        layout = QFormLayout(widget)
+        layout = QVBoxLayout(widget)
 
-        # 精灵选择下拉框
-        self._bind_sprite_selector = QComboBox()
-        self._bind_sprite_selector.addItem("-- 请选择精灵 --")
+        # 精灵搜索选择器
+        sprite_layout = QVBoxLayout()
+        sprite_layout.setSpacing(4)
+
+        sprite_label = QLabel("精灵名称：")
+        sprite_layout.addWidget(sprite_label)
+
+        self._bind_sprite_search = QLineEdit()
+        self._bind_sprite_search.setPlaceholderText("输入精灵名称搜索...")
+        self._bind_sprite_search.setClearButtonEnabled(True)
+        sprite_layout.addWidget(self._bind_sprite_search)
+
+        # 自动补全
+        self._bind_sprite_completer = QCompleter()
+        self._bind_sprite_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._bind_sprite_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._bind_sprite_completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self._bind_sprite_search.setCompleter(self._bind_sprite_completer)
+
+        # 当前选中状态
+        self._selected_sprite_label = QLabel("当前未选择精灵")
+        self._selected_sprite_label.setStyleSheet("color: #a6adc8; font-style: italic;")
+        sprite_layout.addWidget(self._selected_sprite_label)
+
+        layout.addLayout(sprite_layout)
+
+        # 存储精灵数据
         sprites = get_all_sprites(self._session)
-        for sp in sprites:
-            self._bind_sprite_selector.addItem(sp.name, sp.id)
-        self._bind_sprite_selector.currentIndexChanged.connect(self._on_bind_sprite_changed)
-        layout.addRow("选择精灵：", self._bind_sprite_selector)
+        self._sprite_name_to_id = {sp.name: sp.id for sp in sprites}
+        sprite_names = list(self._sprite_name_to_id.keys())
+        self._bind_sprite_completer.setModel(QStringListModel(sprite_names))
+
+        # 连接补全选中信号
+        self._bind_sprite_completer.activated.connect(self._on_sprite_selected)
+
+        # 技能搜索框
+        skill_search_layout = QVBoxLayout()
+        skill_search_layout.setSpacing(4)
+
+        skill_search_label = QLabel("技能搜索：")
+        skill_search_layout.addWidget(skill_search_label)
+
+        self._bind_skill_search = QLineEdit()
+        self._bind_skill_search.setPlaceholderText("输入技能名称过滤...")
+        self._bind_skill_search.setClearButtonEnabled(True)
+        self._bind_skill_search.textChanged.connect(self._filter_skill_list)
+        skill_search_layout.addWidget(self._bind_skill_search)
+
+        layout.addLayout(skill_search_layout)
 
         # 可选技能列表
+        skill_label = QLabel("可选技能（可多选）：")
+        layout.addWidget(skill_label)
+
         self._bind_skill_list = QListWidget()
         self._bind_skill_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
         self._bind_skill_list.setMaximumHeight(200)
@@ -189,26 +234,31 @@ class EntryDialog(QDialog):
             item = QListWidgetItem(f"{s.name} ({s.attribute.name})")
             item.setData(Qt.ItemDataRole.UserRole, s.id)
             self._bind_skill_list.addItem(item)
-        layout.addRow("可选技能（可多选）：", self._bind_skill_list)
+        layout.addWidget(self._bind_skill_list)
 
         # 绑定按钮
         bind_btn = QPushButton("绑定选中技能")
         bind_btn.clicked.connect(self._bind_skills)
-        layout.addRow(bind_btn)
+        layout.addWidget(bind_btn)
 
+        layout.addStretch()
         return widget
 
-    def _on_bind_sprite_changed(self):
-        """精灵选择改变时，高亮该精灵已有技能"""
-        sprite_id = self._bind_sprite_selector.currentData()
-        if sprite_id is None or sprite_id == -1:
+    def _on_sprite_selected(self, sprite_name: str):
+        """精灵补全选中时处理"""
+        sprite_id = self._sprite_name_to_id.get(sprite_name)
+        if sprite_id is None:
+            self._selected_sprite_label.setText("当前未选择精灵")
+            self._selected_sprite_label.setStyleSheet("color: #a6adc8; font-style: italic;")
             self._bind_skill_list.clearSelection()
             return
 
-        # 获取该精灵已有技能ID
-        existing_skill_ids = get_sprite_skill_ids(self._session, sprite_id)
+        # 更新选中状态显示
+        self._selected_sprite_label.setText(f"当前选中：{sprite_name}")
+        self._selected_sprite_label.setStyleSheet("color: #89b4fa; font-weight: bold;")
 
-        # 高亮已有技能
+        # 获取该精灵已有技能ID并高亮
+        existing_skill_ids = get_sprite_skill_ids(self._session, sprite_id)
         self._bind_skill_list.clearSelection()
         for i in range(self._bind_skill_list.count()):
             item = self._bind_skill_list.item(i)
@@ -216,11 +266,26 @@ class EntryDialog(QDialog):
             if skill_id in existing_skill_ids:
                 item.setSelected(True)
 
+    def _filter_skill_list(self, text: str):
+        """过滤技能列表"""
+        search_text = text.lower().strip()
+        for i in range(self._bind_skill_list.count()):
+            item = self._bind_skill_list.item(i)
+            if not search_text:
+                item.setHidden(False)
+            else:
+                item.setHidden(search_text not in item.text().lower())
+
     def _bind_skills(self):
         """绑定选中的技能到当前精灵"""
-        sprite_id = self._bind_sprite_selector.currentData()
-        if sprite_id is None or sprite_id == -1:
-            QMessageBox.warning(self, "提示", "请先选择精灵")
+        sprite_name = self._bind_sprite_search.text().strip()
+        if not sprite_name:
+            QMessageBox.warning(self, "提示", "请先搜索并选择精灵")
+            return
+
+        sprite_id = self._sprite_name_to_id.get(sprite_name)
+        if sprite_id is None:
+            QMessageBox.warning(self, "提示", "未找到该精灵，请从补全列表中选择")
             return
 
         skill_ids = [
@@ -237,7 +302,6 @@ class EntryDialog(QDialog):
             if count == 0:
                 QMessageBox.information(self, "提示", "选中的技能已全部绑定")
             else:
-                sprite_name = self._bind_sprite_selector.currentText()
                 QMessageBox.information(self, "成功", f"已为「{sprite_name}」绑定 {count} 个技能")
         except ValueError as e:
             QMessageBox.warning(self, "警告", str(e))

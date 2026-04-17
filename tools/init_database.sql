@@ -22,7 +22,7 @@ CREATE TABLE attribute (
 -- ============================================
 CREATE TABLE skill (
     id          INTEGER PRIMARY KEY,
-    name        TEXT    NOT NULL UNIQUE,
+    name        TEXT    NOT NULL,
     energy_consumption INTEGER NOT NULL,
     category    TEXT    NOT NULL CHECK (category IN ('魔攻', '物攻', '变化')),
     attribute_id INTEGER NOT NULL,

@@ -36,7 +36,7 @@ CREATE TABLE attribute (
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | INTEGER | PRIMARY KEY | 技能 ID |
-| name | TEXT | NOT NULL UNIQUE | 技能名称 |
+| name | TEXT | NOT NULL | 技能名称 |
 | energy_consumption | INTEGER | NOT NULL | 能量消耗 |
 | category | TEXT | NOT NULL | 类别（魔攻/物攻/变化） |
 | attribute_id | INTEGER | NOT NULL FOREIGN KEY → attribute.id | 技能属性（单属性） |
@@ -48,7 +48,7 @@ CREATE TABLE attribute (
 ```sql
 CREATE TABLE skill (
     id          INTEGER PRIMARY KEY,
-    name        TEXT    NOT NULL UNIQUE,
+    name        TEXT    NOT NULL,
     energy_consumption INTEGER NOT NULL,
     category    TEXT    NOT NULL CHECK (category IN ('魔攻', '物攻', '变化')),
     attribute_id INTEGER NOT NULL,
@@ -170,7 +170,7 @@ CREATE TABLE attribute (
 -- 技能表
 CREATE TABLE skill (
     id          INTEGER PRIMARY KEY,
-    name        TEXT    NOT NULL UNIQUE,
+    name        TEXT    NOT NULL,
     energy_consumption INTEGER NOT NULL,
     category    TEXT    NOT NULL CHECK (category IN ('魔攻', '物攻', '变化')),
     attribute_id INTEGER NOT NULL,

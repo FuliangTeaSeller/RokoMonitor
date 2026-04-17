@@ -23,7 +23,7 @@ class Skill(Base):
     __tablename__ = "skill"
 
     id = Column(Integer, primary_key=True)
-    name = Column(Text, nullable=False, unique=True)
+    name = Column(Text, nullable=False)
     energy_consumption = Column(Integer, nullable=False)
     category = Column(Text, nullable=False)
     attribute_id = Column(Integer, ForeignKey("attribute.id"), nullable=False)
