@@ -94,9 +94,14 @@ class SkillDetailItem(QPushButton):
 class SpriteRowWidget(QFrame):
     """精灵-技能行组件（左右一行）"""
 
-    def __init__(self, sprite_info: SpriteInfo, parent=None):
+    # 信号：行被选中
+    clicked = pyqtSignal(int)  # 参数：行索引
+
+    def __init__(self, row_index: int, sprite_info: Optional[SpriteInfo] = None, parent=None):
         super().__init__(parent)
+        self._row_index = row_index
         self._sprite_info = sprite_info
+        self._selected = False
         self._init_ui()
 
     def _init_ui(self):
@@ -112,54 +117,48 @@ class SpriteRowWidget(QFrame):
         layout.setSpacing(0)
 
         # 左侧：精灵信息
-        left_frame = QFrame()
-        left_frame.setFixedWidth(150)
-        left_frame.setStyleSheet("""
+        self._left_frame = QFrame()
+        self._left_frame.setFixedWidth(150)
+        self._left_frame.setStyleSheet("""
             QFrame {
                 background-color: #313244;
                 border: none;
             }
         """)
-        left_layout = QVBoxLayout(left_frame)
+        self._left_frame.mousePressEvent = lambda e: self.clicked.emit(self._row_index)
+
+        left_layout = QVBoxLayout(self._left_frame)
         left_layout.setContentsMargins(10, 10, 10, 10)
         left_layout.setSpacing(4)
 
         # 精灵图标
-        icon_label = QLabel()
-        icon_label.setFixedSize(48, 48)
-        if self._sprite_info.image_path:
-            icon = load_icon(self._sprite_info.image_path, size=(48, 48))
-            if icon:
-                icon_label.setPixmap(icon)
-        left_layout.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._icon_label = QLabel()
+        self._icon_label.setFixedSize(48, 48)
+        left_layout.addWidget(self._icon_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # 精灵名称
-        name_label = QLabel(self._sprite_info.name)
-        name_label.setFont(QFont("Microsoft YaHei", 11, QFont.Weight.Bold))
-        name_label.setStyleSheet("color: #cdd6f4; background: transparent;")
-        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_layout.addWidget(name_label)
+        self._name_label = QLabel()
+        self._name_label.setFont(QFont("Microsoft YaHei", 11, QFont.Weight.Bold))
+        self._name_label.setStyleSheet("color: #cdd6f4; background: transparent;")
+        self._name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_layout.addWidget(self._name_label)
 
         # 属性
-        if self._sprite_info.attributes:
-            attr_text = " / ".join(self._sprite_info.attributes)
-        else:
-            attr_text = "未知"
-        attr_label = QLabel(attr_text)
-        attr_label.setFont(QFont("Microsoft YaHei", 9))
-        attr_label.setStyleSheet("color: #89b4fa; background: transparent;")
-        attr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_layout.addWidget(attr_label)
+        self._attr_label = QLabel()
+        self._attr_label.setFont(QFont("Microsoft YaHei", 9))
+        self._attr_label.setStyleSheet("color: #89b4fa; background: transparent;")
+        self._attr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_layout.addWidget(self._attr_label)
 
         left_layout.addStretch()
-        layout.addWidget(left_frame)
+        layout.addWidget(self._left_frame)
 
         # 右侧：技能列表（横向滚动）
-        right_scroll = QScrollArea()
-        right_scroll.setWidgetResizable(True)
-        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        right_scroll.setStyleSheet("""
+        self._right_scroll = QScrollArea()
+        self._right_scroll.setWidgetResizable(True)
+        self._right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._right_scroll.setStyleSheet("""
             QScrollArea {
                 background-color: #181825;
                 border: none;
@@ -177,25 +176,93 @@ class SpriteRowWidget(QFrame):
             }
         """)
 
-        skills_container = QWidget()
-        skills_layout = QHBoxLayout(skills_container)
-        skills_layout.setContentsMargins(10, 10, 10, 10)
-        skills_layout.setSpacing(10)
-        skills_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self._skills_container = QWidget()
+        self._skills_layout = QHBoxLayout(self._skills_container)
+        self._skills_layout.setContentsMargins(10, 10, 10, 10)
+        self._skills_layout.setSpacing(10)
+        self._skills_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        if self._sprite_info.skills:
-            for skill in self._sprite_info.skills:
-                item = SkillDetailItem(skill)
-                item.clicked.connect(lambda checked, s=skill: self._show_skill_detail(s))
-                skills_layout.addWidget(item)
+        self._right_scroll.setWidget(self._skills_container)
+        layout.addWidget(self._right_scroll, 1)
+
+        # 初始化显示
+        self._update_display()
+
+    def _update_display(self):
+        """更新显示内容"""
+        # 清空技能布局
+        while self._skills_layout.count():
+            child = self._skills_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        if self._sprite_info:
+            # 显示精灵信息
+            if self._sprite_info.image_path:
+                icon = load_icon(self._sprite_info.image_path, size=(48, 48))
+                if icon:
+                    self._icon_label.setPixmap(icon)
+            self._name_label.setText(self._sprite_info.name)
+            if self._sprite_info.attributes:
+                self._attr_label.setText(" / ".join(self._sprite_info.attributes))
+            else:
+                self._attr_label.setText("未知")
+
+            # 显示技能
+            if self._sprite_info.skills:
+                for skill in self._sprite_info.skills:
+                    item = SkillDetailItem(skill)
+                    item.clicked.connect(lambda checked, s=skill: self._show_skill_detail(s))
+                    self._skills_layout.addWidget(item)
+            else:
+                empty_label = QLabel("暂无技能数据")
+                empty_label.setStyleSheet("color: #a6adc8; font-size: 12px; background: transparent;")
+                self._skills_layout.addWidget(empty_label)
         else:
-            empty_label = QLabel("暂无技能数据")
-            empty_label.setStyleSheet("color: #a6adc8; font-size: 12px; background: transparent;")
-            skills_layout.addWidget(empty_label)
+            # 空槽位
+            self._icon_label.clear()
+            self._name_label.setText(f"槽位 {self._row_index + 1}")
+            self._name_label.setStyleSheet("color: #a6adc8; background: transparent;")
+            self._attr_label.setText("空")
+            self._attr_label.setStyleSheet("color: #585b70; background: transparent;")
 
-        skills_layout.addStretch()
-        right_scroll.setWidget(skills_container)
-        layout.addWidget(right_scroll, 1)
+            empty_label = QLabel("点击左侧选中此槽位")
+            empty_label.setStyleSheet("color: #585b70; font-size: 12px; background: transparent;")
+            self._skills_layout.addWidget(empty_label)
+
+        self._skills_layout.addStretch()
+
+    def set_selected(self, selected: bool):
+        """设置选中状态"""
+        self._selected = selected
+        if selected:
+            self._left_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #45475a;
+                    border: 2px solid #89b4fa;
+                    border-radius: 4px;
+                }
+            """)
+        else:
+            self._left_frame.setStyleSheet("""
+                QFrame {
+                    background-color: #313244;
+                    border: none;
+                }
+            """)
+
+    def set_sprite(self, sprite_info: Optional[SpriteInfo]):
+        """设置精灵数据"""
+        self._sprite_info = sprite_info
+        self._update_display()
+
+    def get_sprite(self) -> Optional[SpriteInfo]:
+        """获取精灵数据"""
+        return self._sprite_info
+
+    def is_empty(self) -> bool:
+        """是否为空槽位"""
+        return self._sprite_info is None
 
     def _show_skill_detail(self, skill: SkillInfo):
         """显示技能详情"""
@@ -223,7 +290,12 @@ class TeamRecognitionDialog(QDialog):
     def _init_ui(self):
         """初始化 UI"""
         self.setWindowTitle("配队识别 - RokoMonitor")
-        self.setMinimumSize(700, 600)
+        self.setMinimumSize(900, 700)
+        self.resize(1200, 800)  # 默认较大尺寸
+
+        # 支持最大化
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
+
         self.setStyleSheet("""
             QDialog {
                 background-color: #1e1e2e;
@@ -336,8 +408,15 @@ class TeamRecognitionDialog(QDialog):
         self._start_btn = QPushButton("开始识别")
         self._stop_btn = QPushButton("停止")
         self._stop_btn.setEnabled(False)
+        self._cover_recognize_btn = QPushButton("识别覆盖")
+        self._cover_recognize_btn.setEnabled(False)
+        self._cover_manual_btn = QPushButton("手动输入")
+        self._cover_manual_btn.setEnabled(False)
         btn_layout.addWidget(self._start_btn)
         btn_layout.addWidget(self._stop_btn)
+        btn_layout.addSpacing(20)
+        btn_layout.addWidget(self._cover_recognize_btn)
+        btn_layout.addWidget(self._cover_manual_btn)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -436,6 +515,7 @@ class TeamRecognitionDialog(QDialog):
 
         # 状态
         self._is_running = False
+        self._selected_slot = -1  # 当前选中的槽位索引（-1表示未选中）
         self._stats = {
             "total": 0,
             "success": 0,
@@ -448,9 +528,56 @@ class TeamRecognitionDialog(QDialog):
         self._matcher = None
         self._sprite_rows = []
 
+        # 初始化6个空槽位
+        self._init_empty_slots()
+
         # 按钮事件
         self._start_btn.clicked.connect(self._on_start_clicked)
         self._stop_btn.clicked.connect(self._on_stop_clicked)
+        self._cover_recognize_btn.clicked.connect(self._on_cover_recognize)
+        self._cover_manual_btn.clicked.connect(self._on_cover_manual)
+
+    def _init_empty_slots(self):
+        """初始化6个空槽位"""
+        for i in range(6):
+            row = SpriteRowWidget(i, sprite_info=None)
+            row.clicked.connect(self._on_slot_clicked)
+            self._sprite_rows.append(row)
+            self._results_layout.addWidget(row)
+
+    def _on_slot_clicked(self, index: int):
+        """槽位被点击"""
+        # 取消之前的选中
+        for i, row in enumerate(self._sprite_rows):
+            row.set_selected(i == index)
+
+        self._selected_slot = index
+        self._cover_recognize_btn.setEnabled(True)
+        self._cover_manual_btn.setEnabled(True)
+        self._update_status(f"已选中槽位 {index + 1}")
+
+    def _on_cover_recognize(self):
+        """识别覆盖当前槽位"""
+        if self._selected_slot < 0:
+            return
+
+        self._update_status(f"正在识别槽位 {self._selected_slot + 1}...")
+        self._perform_recognition(for_slot=self._selected_slot)
+
+    def _on_cover_manual(self):
+        """手动输入覆盖当前槽位"""
+        if self._selected_slot < 0:
+            return
+
+        from PyQt6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "手动输入", "请输入精灵名称：")
+        if ok and name.strip():
+            sprite_info = get_sprite_detail_by_name(self.session, name.strip())
+            if sprite_info:
+                self._sprite_rows[self._selected_slot].set_sprite(sprite_info)
+                self._update_status(f"槽位 {self._selected_slot + 1} 已设置为 {sprite_info.name}")
+            else:
+                QMessageBox.warning(self, "未找到", f"数据库中未找到精灵：{name}")
 
     def _on_start_clicked(self):
         """开始识别按钮点击"""
@@ -502,8 +629,12 @@ class TeamRecognitionDialog(QDialog):
         print("[配队识别] 开始单次识别")
         self._perform_recognition()
 
-    def _perform_recognition(self):
-        """执行一次识别"""
+    def _perform_recognition(self, for_slot: int = -1):
+        """执行一次识别
+
+        Args:
+            for_slot: 指定覆盖的槽位索引，-1表示填充所有空槽位
+        """
         self._stats["total"] += 1
         print(f"[配队识别] ========== 开始第 {self._stats['total']} 次识别 ==========")
 
@@ -603,7 +734,7 @@ class TeamRecognitionDialog(QDialog):
 
             # 6. 更新 UI
             print(f"[配队识别] 识别成功，共 {len(sprite_details)} 只精灵")
-            self._update_results(sprite_details)
+            self._update_results(sprite_details, for_slot)
             self._stats["success"] += 1
             self._update_stats()
 
@@ -613,24 +744,19 @@ class TeamRecognitionDialog(QDialog):
 
         except Exception as e:
             logger.error(f"[配队识别] 识别过程出错: {str(e)}", exc_info=True)
-            self._show_empty_result(f"识别失败: {str(e)}")
+            if for_slot >= 0:
+                self._update_status(f"识别失败: {str(e)}")
+            else:
+                self._show_empty_result(f"识别失败: {str(e)}")
             self._stats["fail"] += 1
             self._update_stats()
             if not self._is_running:
                 self._update_status("识别失败")
 
     def _show_empty_result(self, message: str):
-        """显示空结果"""
-        # 清空现有行
-        for row in self._sprite_rows:
-            row.deleteLater()
-        self._sprite_rows.clear()
-
-        # 显示消息
-        empty_label = QLabel(message)
-        empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        empty_label.setStyleSheet("color: #f38ba8; font-size: 14px; padding: 40px;")
-        self._results_layout.addWidget(empty_label)
+        """显示空结果提示"""
+        # 显示消息（不清空现有槽位）
+        QMessageBox.information(self, "提示", message)
 
     def _update_screenshot_preview(self, image: np.ndarray):
         """更新截图预览"""
@@ -681,23 +807,33 @@ class TeamRecognitionDialog(QDialog):
             self._screenshot_label.setText(f"截图显示失败: {str(e)}")
             self._screenshot_label.clear()  # 清除 pixmap 而不是设置 None
 
-    def _update_results(self, sprite_infos: list[SpriteInfo]):
-        """更新识别结果"""
-        # 清空现有行
-        for row in self._sprite_rows:
-            row.deleteLater()
-        self._sprite_rows.clear()
+    def _update_results(self, sprite_infos: list[SpriteInfo], for_slot: int = -1):
+        """更新识别结果
 
-        # 清空布局
-        while self._results_layout.count():
-            child = self._results_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
-
-        # 添加新行
-        for sprite_info in sprite_infos:
-            row = SpriteRowWidget(sprite_info)
-            self._sprite_rows.append(row)
+        Args:
+            sprite_infos: 识别到的精灵列表
+            for_slot: 指定覆盖的槽位索引，-1表示填充空槽位
+        """
+        if for_slot >= 0:
+            # 覆盖指定槽位
+            if sprite_infos:
+                self._sprite_rows[for_slot].set_sprite(sprite_infos[0])
+                self._update_status(f"槽位 {for_slot + 1} 已设置为 {sprite_infos[0].name}")
+            else:
+                self._update_status(f"槽位 {for_slot + 1} 识别失败")
+        else:
+            # 填充空槽位
+            empty_slots = [i for i, row in enumerate(self._sprite_rows) if row.is_empty()]
+            for i, sprite_info in enumerate(sprite_infos):
+                if i < len(empty_slots):
+                    slot_idx = empty_slots[i]
+                    self._sprite_rows[slot_idx].set_sprite(sprite_info)
+                elif len(self._sprite_rows) < 6:
+                    # 如果还有空位，添加新行
+                    row = SpriteRowWidget(len(self._sprite_rows), sprite_info)
+                    row.clicked.connect(self._on_slot_clicked)
+                    self._sprite_rows.append(row)
+                    self._results_layout.addWidget(row)
             self._results_layout.addWidget(row)
 
     def _update_status(self, status: str):
