@@ -22,6 +22,7 @@ class MainWindow(QMainWindow):
         self._session = session
         self._overlays: list[OverlayWindow] = []
         self._current_sprite: SpriteInfo | None = None
+        self._team_dialog = None
         self._init_ui()
 
     def _init_ui(self):
@@ -229,5 +230,6 @@ class MainWindow(QMainWindow):
 
     def _open_team_dialog(self):
         from src.ui.team_dialog import TeamRecognitionDialog
-        dlg = TeamRecognitionDialog(self._session, self)
-        dlg.exec()
+        if self._team_dialog is None or not self._team_dialog.isVisible():
+            self._team_dialog = TeamRecognitionDialog(self._session, self)
+            self._team_dialog.show()
