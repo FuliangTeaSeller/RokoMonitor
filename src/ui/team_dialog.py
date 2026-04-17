@@ -1097,7 +1097,6 @@ class TeamRecognitionDialog(QDialog):
                     row.clicked.connect(self._on_slot_clicked)
                     self._sprite_rows.append(row)
                     self._results_layout.addWidget(row)
-            self._results_layout.addWidget(row)
 
     def _update_status(self, status: str):
         """更新状态"""
