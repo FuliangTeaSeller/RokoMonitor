@@ -301,9 +301,9 @@ class SpriteRowWidget(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # 左侧：精灵信息
+        # 左侧：精灵信息（头像 + 名字/属性）
         self._left_frame = QFrame()
-        self._left_frame.setFixedWidth(150)
+        self._left_frame.setFixedWidth(180)
         self._left_frame.setStyleSheet("""
             QFrame {
                 background-color: #313244;
@@ -312,29 +312,30 @@ class SpriteRowWidget(QFrame):
         """)
         self._left_frame.mousePressEvent = lambda e: self.clicked.emit(self._row_index)
 
-        left_layout = QVBoxLayout(self._left_frame)
-        left_layout.setContentsMargins(10, 10, 10, 10)
-        left_layout.setSpacing(4)
+        left_layout = QHBoxLayout(self._left_frame)
+        left_layout.setContentsMargins(8, 8, 8, 8)
+        left_layout.setSpacing(10)
 
         # 精灵图标
         self._icon_label = QLabel()
         self._icon_label.setFixedSize(48, 48)
-        left_layout.addWidget(self._icon_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        left_layout.addWidget(self._icon_label)
 
-        # 精灵名称
+        # 精灵名称和属性
+        name_attr_layout = QVBoxLayout()
+        name_attr_layout.setSpacing(2)
+
         self._name_label = QLabel()
         self._name_label.setFont(QFont("Microsoft YaHei", 11, QFont.Weight.Bold))
         self._name_label.setStyleSheet("color: #cdd6f4; background: transparent;")
-        self._name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_layout.addWidget(self._name_label)
+        name_attr_layout.addWidget(self._name_label)
 
-        # 属性
         self._attr_label = QLabel()
         self._attr_label.setFont(QFont("Microsoft YaHei", 9))
         self._attr_label.setStyleSheet("color: #89b4fa; background: transparent;")
-        self._attr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_layout.addWidget(self._attr_label)
+        name_attr_layout.addWidget(self._attr_label)
 
+        left_layout.addLayout(name_attr_layout)
         left_layout.addStretch()
         layout.addWidget(self._left_frame)
 
