@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
-from PyQt6.QtGui import QFont, QPixmap, QImage
+from PyQt6.QtGui import QFont, QPixmap, QImage, QIcon
 import numpy as np
 
 from sqlalchemy.orm import Session
@@ -36,6 +36,7 @@ class SpriteSearchDialog(QDialog):
 
     def _init_ui(self):
         self.setWindowTitle("选择精灵")
+        self.setWindowIcon(QIcon("reference/图片/logo_upscale.png"))
         self.setFixedSize(400, 500)
         self.setStyleSheet("""
             QDialog {
@@ -475,6 +476,7 @@ class TeamRecognitionDialog(QDialog):
     def _init_ui(self):
         """初始化 UI"""
         self.setWindowTitle("配队识别 - RokoMonitor")
+        self.setWindowIcon(QIcon("reference/图片/logo_upscale.png"))
         self.setMinimumSize(900, 700)
         self.resize(1200, 800)  # 默认较大尺寸
 

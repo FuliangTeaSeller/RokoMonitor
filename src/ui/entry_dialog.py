@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QPushButton, QLabel, QMessageBox,
 )
 from PyQt6.QtCore import Qt, QStringListModel
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QCompleter
 
 from sqlalchemy.orm import Session
@@ -29,6 +30,7 @@ class EntryDialog(QDialog):
         super().__init__(parent)
         self._session = session
         self.setWindowTitle("手动录入")
+        self.setWindowIcon(QIcon("reference/图片/logo_upscale.png"))
         self.setMinimumSize(450, 500)
         self._init_ui()
 

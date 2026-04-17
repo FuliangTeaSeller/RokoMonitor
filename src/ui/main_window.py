@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QMessageBox,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont, QIcon, QPixmap
 
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,7 @@ class MainWindow(QMainWindow):
 
     def _init_ui(self):
         self.setWindowTitle("RokoMonitor - 洛克王国对战辅助")
+        self.setWindowIcon(QIcon("reference/图片/logo.png"))
         self.setMinimumSize(600, 500)
         self.setStyleSheet("""
             QMainWindow {
