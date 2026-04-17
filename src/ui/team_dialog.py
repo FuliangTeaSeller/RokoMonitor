@@ -342,23 +342,12 @@ class SpriteRowWidget(QFrame):
         # 右侧：技能列表（横向滚动）
         self._right_scroll = QScrollArea()
         self._right_scroll.setWidgetResizable(True)
-        self._right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._right_scroll.setStyleSheet("""
             QScrollArea {
                 background-color: #181825;
                 border: none;
-            }
-            QScrollBar:horizontal {
-                background-color: #181825;
-                height: 8px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #45475a;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:horizontal:hover {
-                background-color: #585b70;
             }
         """)
 
@@ -462,6 +451,16 @@ class SpriteRowWidget(QFrame):
             detail += f"\n效果：\n{skill.description}"
 
         QMessageBox.information(self, "技能详情", detail)
+
+    def wheelEvent(self, event):
+        """鼠标滚轮事件：横向滚动技能列表"""
+        # 获取横向滚动条
+        h_bar = self._right_scroll.horizontalScrollBar()
+        if h_bar:
+            # 将垂直滚轮增量转换为水平滚动
+            delta = event.angleDelta().y()
+            h_bar.setValue(h_bar.value() - delta // 2)
+        event.accept()
 
 
 class TeamRecognitionDialog(QDialog):
