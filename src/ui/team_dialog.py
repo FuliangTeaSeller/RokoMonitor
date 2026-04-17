@@ -34,7 +34,7 @@ class SkillDetailItem(QPushButton):
 
     def _init_ui(self):
         skill = self._skill
-        self.setFixedSize(200, 80)
+        self.setFixedSize(320, 80)  # 加宽以容纳三列布局
         self.setStyleSheet("""
             QPushButton {
                 background-color: #313244;
@@ -51,44 +51,59 @@ class SkillDetailItem(QPushButton):
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(10)
 
-        # 技能图标
+        # 左：技能图标
         self._icon_label = QLabel()
-        self._icon_label.setFixedSize(32, 32)
+        self._icon_label.setFixedSize(40, 40)
         if skill.image_path:
-            icon = load_icon(skill.image_path, size=(32, 32))
+            icon = load_icon(skill.image_path, size=(40, 40))
             if icon:
                 self._icon_label.setPixmap(icon)
         layout.addWidget(self._icon_label)
 
-        # 技能信息
-        info_layout = QVBoxLayout()
-        info_layout.setSpacing(2)
+        # 中：技能名 && 属性、能耗
+        middle_layout = QVBoxLayout()
+        middle_layout.setSpacing(2)
 
         # 名称
         name_label = QLabel(skill.name)
         name_label.setFont(QFont("Microsoft YaHei", 11, QFont.Weight.Bold))
         name_label.setStyleSheet("color: #cdd6f4; background: transparent;")
-        info_layout.addWidget(name_label)
+        middle_layout.addWidget(name_label)
 
         # 属性 + 能耗
-        attr_energy = f"[{skill.attribute}] 能耗:{skill.energy_consumption}"
+        attr_energy = f"[{skill.attribute}]  能耗:{skill.energy_consumption}"
         attr_label = QLabel(attr_energy)
         attr_label.setFont(QFont("Microsoft YaHei", 9))
         attr_label.setStyleSheet("color: #89b4fa; background: transparent;")
-        info_layout.addWidget(attr_label)
+        middle_layout.addWidget(attr_label)
 
-        # 描述（截断）
+        layout.addLayout(middle_layout)
+
+        # 分隔线
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setStyleSheet("background-color: #45475a;")
+        layout.addWidget(separator)
+
+        # 右：技能效果详情
+        desc_layout = QVBoxLayout()
         if skill.description:
-            desc = skill.description[:20] + "..." if len(skill.description) > 20 else skill.description
-            desc_label = QLabel(desc)
-            desc_label.setFont(QFont("Microsoft YaHei", 8))
+            desc_label = QLabel(skill.description)
+            desc_label.setFont(QFont("Microsoft YaHei", 9))
             desc_label.setStyleSheet("color: #a6adc8; background: transparent;")
-            info_layout.addWidget(desc_label)
+            desc_label.setWordWrap(True)
+            desc_label.setMaximumWidth(150)
+            desc_layout.addWidget(desc_label)
+        else:
+            empty_label = QLabel("无描述")
+            empty_label.setFont(QFont("Microsoft YaHei", 9))
+            empty_label.setStyleSheet("color: #585b70; background: transparent;")
+            desc_layout.addWidget(empty_label)
 
-        layout.addLayout(info_layout)
+        layout.addLayout(desc_layout, 1)  # 描述区域可伸展
 
 
 class SpriteRowWidget(QFrame):
