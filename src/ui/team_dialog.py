@@ -657,6 +657,24 @@ class TeamRecognitionDialog(QDialog):
         title_layout.addWidget(title)
         title_layout.addStretch()
 
+        self._clear_btn = QPushButton("一键清除")
+        self._clear_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: 1px solid #585b70;
+                border-radius: 4px;
+                padding: 4px 12px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #585b70;
+                border-color: #f38ba8;
+            }
+        """)
+        self._clear_btn.clicked.connect(self._clear_all_slots)
+        title_layout.addWidget(self._clear_btn)
+
         self._fullscreen_btn = QPushButton("全屏展示")
         self._fullscreen_btn.setCheckable(True)
         self._fullscreen_btn.setStyleSheet("""
@@ -810,6 +828,13 @@ class TeamRecognitionDialog(QDialog):
             if sprite_info:
                 self._sprite_rows[self._selected_slot].set_sprite(sprite_info)
                 self._update_status(f"槽位 {self._selected_slot + 1} 已设置为 {sprite_info.name}")
+
+    def _clear_all_slots(self):
+        """清除所有槽位"""
+        for row in self._sprite_rows:
+            row.set_sprite(None)
+        self._selected_slot = -1
+        self._update_status("已清除所有槽位")
 
     def _on_start_clicked(self):
         """开始识别按钮点击"""
