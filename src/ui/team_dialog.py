@@ -24,132 +24,178 @@ from src.ui.image_utils import load_icon
 logger = logging.getLogger(__name__)
 
 
-class SpriteCard(QWidget):
-    """精灵信息卡片"""
+class SkillDetailItem(QPushButton):
+    """技能详情卡片（右侧技能项）"""
 
-    def __init__(self, sprite_info: SpriteInfo, parent=None):
+    def __init__(self, skill: SkillInfo, parent=None):
         super().__init__(parent)
-        self._sprite_info = sprite_info
-        self._expanded = False
-        self._visible_count = 8  # 默认显示的技能数量
-        self._skill_buttons = []
+        self._skill = skill
         self._init_ui()
-        self._load_data()
 
     def _init_ui(self):
-        """初始化 UI"""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
-
-        # 头部：精灵名称 + 属性
-        header = QHBoxLayout()
-        self._icon_label = QLabel()
-        self._icon_label.setFixedSize(48, 48)
-        header.addWidget(self._icon_label)
-
-        name_attr_layout = QVBoxLayout()
-        self._name_label = QLabel()
-        self._name_label.setFont(QFont("Microsoft YaHei", 13, QFont.Weight.Bold))
-        name_attr_layout.addWidget(self._name_label)
-
-        self._attr_label = QLabel()
-        self._attr_label.setFont(QFont("Microsoft YaHei", 10))
-        name_attr_layout.addWidget(self._attr_label)
-
-        header.addLayout(name_attr_layout)
-        header.addStretch()
-
-        layout.addLayout(header)
-
-        # 分隔线
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("background-color: #45475a;")
-        layout.addWidget(line)
-
-        # 技能网格
-        self._skill_grid = QGridLayout()
-        self._skill_grid.setSpacing(8)
-        layout.addLayout(self._skill_grid)
-
-        # 展开/折叠按钮
-        self._toggle_btn = QPushButton("展开全部")
-        self._toggle_btn.clicked.connect(self._toggle_expand)
-        self._toggle_btn.setStyleSheet("""
+        skill = self._skill
+        self.setFixedSize(200, 80)
+        self.setStyleSheet("""
             QPushButton {
                 background-color: #313244;
-                color: #89b4fa;
+                color: #cdd6f4;
                 border: 1px solid #45475a;
-                border-radius: 4px;
-                padding: 4px 12px;
-                font-size: 11px;
+                border-radius: 6px;
+                text-align: left;
+                padding: 6px;
             }
             QPushButton:hover {
                 background-color: #45475a;
                 border-color: #89b4fa;
             }
         """)
-        layout.addWidget(self._toggle_btn)
 
-    def _load_data(self):
-        """加载数据"""
-        info = self._sprite_info
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(8)
 
-        # 加载图标
-        if info.image_path:
-            icon = load_icon(info.image_path, size=(44, 44))
+        # 技能图标
+        self._icon_label = QLabel()
+        self._icon_label.setFixedSize(32, 32)
+        if skill.image_path:
+            icon = load_icon(skill.image_path, size=(32, 32))
             if icon:
                 self._icon_label.setPixmap(icon)
+        layout.addWidget(self._icon_label)
 
-        self._name_label.setText(info.name)
-        if info.attributes:
-            self._attr_label.setText(" / ".join(info.attributes))
+        # 技能信息
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
+
+        # 名称
+        name_label = QLabel(skill.name)
+        name_label.setFont(QFont("Microsoft YaHei", 11, QFont.Weight.Bold))
+        name_label.setStyleSheet("color: #cdd6f4; background: transparent;")
+        info_layout.addWidget(name_label)
+
+        # 属性 + 能耗
+        attr_energy = f"[{skill.attribute}] 能耗:{skill.energy_consumption}"
+        attr_label = QLabel(attr_energy)
+        attr_label.setFont(QFont("Microsoft YaHei", 9))
+        attr_label.setStyleSheet("color: #89b4fa; background: transparent;")
+        info_layout.addWidget(attr_label)
+
+        # 描述（截断）
+        if skill.description:
+            desc = skill.description[:20] + "..." if len(skill.description) > 20 else skill.description
+            desc_label = QLabel(desc)
+            desc_label.setFont(QFont("Microsoft YaHei", 8))
+            desc_label.setStyleSheet("color: #a6adc8; background: transparent;")
+            info_layout.addWidget(desc_label)
+
+        layout.addLayout(info_layout)
+
+
+class SpriteRowWidget(QFrame):
+    """精灵-技能行组件（左右一行）"""
+
+    def __init__(self, sprite_info: SpriteInfo, parent=None):
+        super().__init__(parent)
+        self._sprite_info = sprite_info
+        self._init_ui()
+
+    def _init_ui(self):
+        self.setStyleSheet("""
+            QFrame {
+                background-color: transparent;
+                border-bottom: 1px solid #45475a;
+            }
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # 左侧：精灵信息
+        left_frame = QFrame()
+        left_frame.setFixedWidth(150)
+        left_frame.setStyleSheet("""
+            QFrame {
+                background-color: #313244;
+                border: none;
+            }
+        """)
+        left_layout = QVBoxLayout(left_frame)
+        left_layout.setContentsMargins(10, 10, 10, 10)
+        left_layout.setSpacing(4)
+
+        # 精灵图标
+        icon_label = QLabel()
+        icon_label.setFixedSize(48, 48)
+        if self._sprite_info.image_path:
+            icon = load_icon(self._sprite_info.image_path, size=(48, 48))
+            if icon:
+                icon_label.setPixmap(icon)
+        left_layout.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # 精灵名称
+        name_label = QLabel(self._sprite_info.name)
+        name_label.setFont(QFont("Microsoft YaHei", 11, QFont.Weight.Bold))
+        name_label.setStyleSheet("color: #cdd6f4; background: transparent;")
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_layout.addWidget(name_label)
+
+        # 属性
+        if self._sprite_info.attributes:
+            attr_text = " / ".join(self._sprite_info.attributes)
         else:
-            self._attr_label.setText("未知属性")
+            attr_text = "未知"
+        attr_label = QLabel(attr_text)
+        attr_label.setFont(QFont("Microsoft YaHei", 9))
+        attr_label.setStyleSheet("color: #89b4fa; background: transparent;")
+        attr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_layout.addWidget(attr_label)
 
-        # 加载技能
-        self._load_skills()
+        left_layout.addStretch()
+        layout.addWidget(left_frame)
 
-    def _load_skills(self):
-        """加载技能按钮"""
-        # 清空现有按钮
-        for btn in self._skill_buttons:
-            btn.deleteLater()
-        self._skill_buttons.clear()
+        # 右侧：技能列表（横向滚动）
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        right_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        right_scroll.setStyleSheet("""
+            QScrollArea {
+                background-color: #181825;
+                border: none;
+            }
+            QScrollBar:horizontal {
+                background-color: #181825;
+                height: 8px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #45475a;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #585b70;
+            }
+        """)
 
-        skills = self._sprite_info.skills
-        if not skills:
+        skills_container = QWidget()
+        skills_layout = QHBoxLayout(skills_container)
+        skills_layout.setContentsMargins(10, 10, 10, 10)
+        skills_layout.setSpacing(10)
+        skills_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        if self._sprite_info.skills:
+            for skill in self._sprite_info.skills:
+                item = SkillDetailItem(skill)
+                item.clicked.connect(lambda checked, s=skill: self._show_skill_detail(s))
+                skills_layout.addWidget(item)
+        else:
             empty_label = QLabel("暂无技能数据")
-            empty_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
-            self._skill_grid.addWidget(empty_label, 0, 0)
-            self._toggle_btn.hide()
-            return
+            empty_label.setStyleSheet("color: #a6adc8; font-size: 12px; background: transparent;")
+            skills_layout.addWidget(empty_label)
 
-        display_count = len(skills) if self._expanded else min(len(skills), self._visible_count)
-
-        for i in range(display_count):
-            skill = skills[i]
-            btn = SkillButton(skill)
-            btn.clicked.connect(lambda checked, s=skill: self._show_skill_detail(s))
-            self._skill_buttons.append(btn)
-
-            row = i // 2
-            col = i % 2
-            self._skill_grid.addWidget(btn, row, col)
-
-        # 更新折叠按钮
-        if len(skills) <= self._visible_count:
-            self._toggle_btn.hide()
-        else:
-            total_count = len(skills)
-            self._toggle_btn.setText("折叠" if self._expanded else f"展开全部({total_count}个技能)")
-            self._toggle_btn.show()
-
-    def _toggle_expand(self):
-        """切换展开/折叠"""
-        self._expanded = not self._expanded
-        self._load_skills()
+        skills_layout.addStretch()
+        right_scroll.setWidget(skills_container)
+        layout.addWidget(right_scroll, 1)
 
     def _show_skill_detail(self, skill: SkillInfo):
         """显示技能详情"""
@@ -163,45 +209,6 @@ class SpriteCard(QWidget):
             detail += f"\n效果：\n{skill.description}"
 
         QMessageBox.information(self, "技能详情", detail)
-
-
-class SkillButton(QPushButton):
-    """技能按钮"""
-
-    def __init__(self, skill: SkillInfo, parent=None):
-        super().__init__(parent)
-        self._skill = skill
-        self._init_ui()
-
-    def _init_ui(self):
-        skill = self._skill
-        text = f"{skill.name}"
-        if skill.power:
-            text += f"\n威力: {skill.power}"
-        else:
-            text += "\n变化类"
-        text += f"\n[{skill.attribute}]"
-
-        self.setText(text)
-        self.setMinimumHeight(65)
-        self.setStyleSheet("""
-            QPushButton {
-                background-color: #313244;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                border-radius: 6px;
-                text-align: left;
-                padding: 8px 12px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #45475a;
-                border-color: #89b4fa;
-            }
-            QPushButton:pressed {
-                background-color: #1e1e2e;
-            }
-        """)
 
 
 class TeamRecognitionDialog(QDialog):
@@ -439,7 +446,7 @@ class TeamRecognitionDialog(QDialog):
         self._capture = None
         self._ocr_engine = None
         self._matcher = None
-        self._sprite_cards = []
+        self._sprite_rows = []
 
         # 按钮事件
         self._start_btn.clicked.connect(self._on_start_clicked)
@@ -614,10 +621,10 @@ class TeamRecognitionDialog(QDialog):
 
     def _show_empty_result(self, message: str):
         """显示空结果"""
-        # 清空现有卡片
-        for card in self._sprite_cards:
-            card.deleteLater()
-        self._sprite_cards.clear()
+        # 清空现有行
+        for row in self._sprite_rows:
+            row.deleteLater()
+        self._sprite_rows.clear()
 
         # 显示消息
         empty_label = QLabel(message)
@@ -676,10 +683,10 @@ class TeamRecognitionDialog(QDialog):
 
     def _update_results(self, sprite_infos: list[SpriteInfo]):
         """更新识别结果"""
-        # 清空现有卡片
-        for card in self._sprite_cards:
-            card.deleteLater()
-        self._sprite_cards.clear()
+        # 清空现有行
+        for row in self._sprite_rows:
+            row.deleteLater()
+        self._sprite_rows.clear()
 
         # 清空布局
         while self._results_layout.count():
@@ -687,11 +694,11 @@ class TeamRecognitionDialog(QDialog):
             if child.widget():
                 child.widget().deleteLater()
 
-        # 添加新卡片
+        # 添加新行
         for sprite_info in sprite_infos:
-            card = SpriteCard(sprite_info)
-            self._sprite_cards.append(card)
-            self._results_layout.addWidget(card)
+            row = SpriteRowWidget(sprite_info)
+            self._sprite_rows.append(row)
+            self._results_layout.addWidget(row)
 
     def _update_status(self, status: str):
         """更新状态"""
