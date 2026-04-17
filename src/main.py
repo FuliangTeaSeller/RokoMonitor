@@ -32,11 +32,19 @@ def main():
     init_db()
     logging.info("数据库初始化完成")
 
+    # 初始化拼音缓存
+    from src.utils.pinyin_service import PinyinService
+    from src.database.queries import get_all_sprites, get_all_skills
+    session = get_session()
+    pinyin_svc = PinyinService()
+    pinyin_svc.init_sprite_cache(get_all_sprites(session))
+    pinyin_svc.init_skill_cache(get_all_skills(session))
+    logging.info("拼音缓存初始化完成")
+
     # 启动 Qt 应用
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    session = get_session()
     window = MainWindow(session)
     window.show()
 

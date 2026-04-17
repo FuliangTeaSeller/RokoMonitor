@@ -20,6 +20,7 @@ from src.database.queries import (
     add_sprite_skills,
     get_sprite_skill_ids,
 )
+from src.ui.widgets.pinyin_completer import PinyinCompleter
 
 
 class EntryDialog(QDialog):
@@ -185,9 +186,8 @@ class EntryDialog(QDialog):
         sprite_layout.addWidget(self._bind_sprite_search)
 
         # 自动补全
-        self._bind_sprite_completer = QCompleter()
+        self._bind_sprite_completer = PinyinCompleter()
         self._bind_sprite_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self._bind_sprite_completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self._bind_sprite_completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
         self._bind_sprite_search.setCompleter(self._bind_sprite_completer)
 
@@ -202,7 +202,7 @@ class EntryDialog(QDialog):
         sprites = get_all_sprites(self._session)
         self._sprite_name_to_id = {sp.name: sp.id for sp in sprites}
         sprite_names = list(self._sprite_name_to_id.keys())
-        self._bind_sprite_completer.setModel(QStringListModel(sprite_names))
+        self._bind_sprite_completer.setSourceModel(QStringListModel(sprite_names))
 
         # 连接补全选中信号
         self._bind_sprite_completer.activated.connect(self._on_sprite_selected)
@@ -295,14 +295,19 @@ class EntryDialog(QDialog):
         self._bind_skill_list.scrollToTop()
 
     def _filter_skill_list(self, text: str):
-        """过滤技能列表"""
-        search_text = text.lower().strip()
+        """过滤技能列表（支持拼音首字母）"""
+        from src.utils.pinyin_service import PinyinService
+
+        search_text = text.strip()
         for i in range(self._bind_skill_list.count()):
             item = self._bind_skill_list.item(i)
             if not search_text:
                 item.setHidden(False)
             else:
-                item.setHidden(search_text not in item.text().lower())
+                # 提取技能名称（格式: "技能名 (属性)"）
+                item_text = item.text()
+                skill_name = item_text.split(' (')[0]
+                item.setHidden(not PinyinService.match(skill_name, search_text))
 
     def _bind_skills(self):
         """绑定选中的技能到当前精灵"""

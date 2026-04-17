@@ -35,9 +35,18 @@ class SpriteInfo:
 
 
 def search_sprites_by_name(session: Session, keyword: str) -> list[SpriteInfo]:
-    """按名称模糊搜索精灵，返回精灵基本信息（不含技能池）"""
-    stmt = select(Sprite).where(Sprite.name.like(f"%{keyword}%"))
-    sprites = session.execute(stmt).scalars().all()
+    """按名称或拼音首字母搜索精灵"""
+    from src.utils.pinyin_service import PinyinService
+
+    pinyin_svc = PinyinService()
+    matching_ids = pinyin_svc.search_sprites(keyword)
+
+    if not matching_ids:
+        return []
+
+    sprites = session.execute(
+        select(Sprite).where(Sprite.id.in_(matching_ids))
+    ).scalars().all()
 
     results = []
     for sp in sprites:
@@ -93,6 +102,11 @@ def add_sprite(session: Session, name: str, attribute_ids: list[int], skill_ids:
         session.add(SpriteSkill(sprite_id=sp.id, skill_id=sid))
 
     session.commit()
+
+    # 更新拼音缓存
+    from src.utils.pinyin_service import PinyinService
+    PinyinService().add_sprite(sp.id, name)
+
     return sp
 
 
@@ -116,6 +130,11 @@ def add_skill(
     )
     session.add(skill)
     session.commit()
+
+    # 更新拼音缓存
+    from src.utils.pinyin_service import PinyinService
+    PinyinService().add_skill(skill.id, name)
+
     return skill
 
 
