@@ -508,21 +508,19 @@ class TeamRecognitionDialog(QDialog):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(16)
 
-        # 识别控制区
+        # 识别控制区、状态信息区、截图预览区放在一行
+        top_layout = QHBoxLayout()
         control_group = self._create_control_group()
-        layout.addWidget(control_group)
-
-        # 截图显示区
+        status_group = self._create_status_group()
         screenshot_group = self._create_screenshot_group()
-        layout.addWidget(screenshot_group)
+        top_layout.addWidget(control_group, 1)  # 控制区可伸展
+        top_layout.addWidget(status_group, 0)   # 状态区固定宽度
+        top_layout.addWidget(screenshot_group, 0)  # 截图区固定宽度
+        layout.addLayout(top_layout)
 
         # 识别结果区
         results_group = self._create_results_group()
         layout.addWidget(results_group, 1)  # expand=1
-
-        # 状态信息区
-        status_group = self._create_status_group()
-        layout.addWidget(status_group)
 
     def _create_control_group(self) -> QFrame:
         """创建识别控制区"""
@@ -606,6 +604,7 @@ class TeamRecognitionDialog(QDialog):
     def _create_screenshot_group(self) -> QtFrame:
         """创建截图显示区"""
         frame = QtFrame()
+        frame.setFixedWidth(280)  # 固定宽度
         frame.setStyleSheet("""
             QFrame {
                 background-color: #313244;
@@ -623,7 +622,7 @@ class TeamRecognitionDialog(QDialog):
 
         # 截图显示标签
         self._screenshot_label = QLabel()
-        self._screenshot_label.setMinimumHeight(150)
+        self._screenshot_label.setMinimumSize(250, 150)
         self._screenshot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._screenshot_label.setStyleSheet("""
             QLabel {
@@ -666,6 +665,7 @@ class TeamRecognitionDialog(QDialog):
     def _create_status_group(self) -> QFrame:
         """创建状态信息区"""
         frame = QFrame()
+        frame.setFixedWidth(150)  # 固定宽度
         frame.setStyleSheet("""
             QFrame {
                 background-color: #313244;
@@ -673,16 +673,15 @@ class TeamRecognitionDialog(QDialog):
                 padding: 8px;
             }
         """)
-        layout = QHBoxLayout(frame)
+        layout = QVBoxLayout(frame)
+        layout.setSpacing(8)
 
         self._status_label = QLabel("状态：就绪")
         self._count_label = QLabel("识别次数：0")
         self._success_label = QLabel("成功率：0%")
 
         layout.addWidget(self._status_label)
-        layout.addSpacing(20)
         layout.addWidget(self._count_label)
-        layout.addSpacing(20)
         layout.addWidget(self._success_label)
         layout.addStretch()
 
