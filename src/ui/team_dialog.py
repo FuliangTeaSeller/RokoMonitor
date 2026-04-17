@@ -577,13 +577,16 @@ class TeamRecognitionDialog(QDialog):
         region_label = QLabel("截图区域：")
         self._top_right_radio = QRadioButton("右上角（单精灵）")
         self._team_list_radio = QRadioButton("配队列表（全阵容）")
+        self._first_team_radio = QRadioButton("首发页面（6精灵）")
         self._top_right_radio.setChecked(True)
         self._region_group = QButtonGroup(self)
         self._region_group.addButton(self._top_right_radio)
         self._region_group.addButton(self._team_list_radio)
+        self._region_group.addButton(self._first_team_radio)
         region_layout.addWidget(region_label)
         region_layout.addWidget(self._top_right_radio)
         region_layout.addWidget(self._team_list_radio)
+        region_layout.addWidget(self._first_team_radio)
         region_layout.addStretch()
         layout.addLayout(region_layout)
 
@@ -904,7 +907,12 @@ class TeamRecognitionDialog(QDialog):
                 raise
 
             # 2. 截图
-            region_type = "top_right" if self._top_right_radio.isChecked() else "team_list"
+            if self._top_right_radio.isChecked():
+                region_type = "top_right"
+            elif self._team_list_radio.isChecked():
+                region_type = "team_list"
+            else:
+                region_type = "first_team"
             region = CAPTURE_REGIONS[region_type]
             print(f"[配队识别] 截图区域: {region_type}, 坐标: x={region['x']:.4f}, y={region['y']:.4f}, w={region['width']:.4f}, h={region['height']:.4f}")
 
