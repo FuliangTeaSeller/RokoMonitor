@@ -188,6 +188,7 @@ class EntryDialog(QDialog):
         self._bind_sprite_completer = QCompleter()
         self._bind_sprite_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self._bind_sprite_completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self._bind_sprite_completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self._bind_sprite_search.setCompleter(self._bind_sprite_completer)
 
         # 当前选中状态
