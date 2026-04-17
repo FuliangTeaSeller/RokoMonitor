@@ -509,18 +509,18 @@ class TeamRecognitionDialog(QDialog):
         layout.setSpacing(16)
 
         # 识别控制区、状态信息区、截图预览区放在一行
-        top_layout = QHBoxLayout()
-        control_group = self._create_control_group()
-        status_group = self._create_status_group()
-        screenshot_group = self._create_screenshot_group()
-        top_layout.addWidget(control_group, 1)  # 控制区可伸展
-        top_layout.addWidget(status_group, 0)   # 状态区固定宽度
-        top_layout.addWidget(screenshot_group, 0)  # 截图区固定宽度
-        layout.addLayout(top_layout)
+        self._top_layout = QHBoxLayout()
+        self._control_group = self._create_control_group()
+        self._status_group = self._create_status_group()
+        self._screenshot_group = self._create_screenshot_group()
+        self._top_layout.addWidget(self._control_group, 1)  # 控制区可伸展
+        self._top_layout.addWidget(self._status_group, 0)   # 状态区固定宽度
+        self._top_layout.addWidget(self._screenshot_group, 0)  # 截图区固定宽度
+        layout.addLayout(self._top_layout)
 
         # 识别结果区
-        results_group = self._create_results_group()
-        layout.addWidget(results_group, 1)  # expand=1
+        self._results_group = self._create_results_group()
+        layout.addWidget(self._results_group, 1)  # expand=1
 
     def _create_control_group(self) -> QFrame:
         """创建识别控制区"""
@@ -642,10 +642,37 @@ class TeamRecognitionDialog(QDialog):
         layout = QVBoxLayout(frame)
         layout.setSpacing(8)
 
-        # 标题
+        # 标题栏（标题 + 全屏按钮）
+        title_layout = QHBoxLayout()
         title = QLabel("识别结果")
         title.setFont(QFont("Microsoft YaHei", 12, QFont.Weight.Bold))
-        layout.addWidget(title)
+        title_layout.addWidget(title)
+        title_layout.addStretch()
+
+        self._fullscreen_btn = QPushButton("全屏展示")
+        self._fullscreen_btn.setCheckable(True)
+        self._fullscreen_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: 1px solid #585b70;
+                border-radius: 4px;
+                padding: 4px 12px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #585b70;
+                border-color: #89b4fa;
+            }
+            QPushButton:checked {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+            }
+        """)
+        self._fullscreen_btn.clicked.connect(self._toggle_fullscreen_results)
+        title_layout.addWidget(self._fullscreen_btn)
+
+        layout.addLayout(title_layout)
 
         # 滚动区域
         scroll = QScrollArea()
@@ -716,6 +743,26 @@ class TeamRecognitionDialog(QDialog):
         self._stop_btn.clicked.connect(self._on_stop_clicked)
         self._cover_recognize_btn.clicked.connect(self._on_cover_recognize)
         self._cover_manual_btn.clicked.connect(self._on_cover_manual)
+
+        # 全屏状态
+        self._is_fullscreen_results = False
+
+    def _toggle_fullscreen_results(self):
+        """切换识别结果区全屏显示"""
+        self._is_fullscreen_results = not self._is_fullscreen_results
+
+        if self._is_fullscreen_results:
+            # 隐藏顶部区域
+            self._control_group.hide()
+            self._status_group.hide()
+            self._screenshot_group.hide()
+            self._fullscreen_btn.setText("退出全屏")
+        else:
+            # 显示顶部区域
+            self._control_group.show()
+            self._status_group.show()
+            self._screenshot_group.show()
+            self._fullscreen_btn.setText("全屏展示")
 
     def _init_empty_slots(self):
         """初始化6个空槽位"""
