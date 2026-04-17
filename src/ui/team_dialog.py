@@ -229,7 +229,7 @@ class SkillDetailItem(QPushButton):
                 self._icon_label.setPixmap(icon)
         layout.addWidget(self._icon_label)
 
-        # 中：技能名 && 属性、能耗
+        # 中：技能名 && 属性、能耗、威力
         middle_layout = QVBoxLayout()
         middle_layout.setSpacing(2)
 
@@ -239,9 +239,13 @@ class SkillDetailItem(QPushButton):
         name_label.setStyleSheet("color: #cdd6f4; background: transparent;")
         middle_layout.addWidget(name_label)
 
-        # 属性 + 能耗
-        attr_energy = f"[{skill.attribute}]  能耗:{skill.energy_consumption}"
-        attr_label = QLabel(attr_energy)
+        # 属性 + 能耗 + 威力
+        attr_info = f"[{skill.attribute}]  能耗:{skill.energy_consumption}"
+        if skill.power:
+            attr_info += f"  威力:{skill.power}"
+        elif skill.category == "变化":
+            attr_info += "  变化"
+        attr_label = QLabel(attr_info)
         attr_label.setFont(QFont("Microsoft YaHei", 9))
         attr_label.setStyleSheet("color: #89b4fa; background: transparent;")
         middle_layout.addWidget(attr_label)
