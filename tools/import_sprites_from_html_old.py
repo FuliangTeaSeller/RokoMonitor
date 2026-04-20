@@ -268,7 +268,7 @@ def main():
     project_root = Path(__file__).parent.parent
     html_path = project_root / 'reference' / '精灵' / '精灵图鉴 _ 洛克王国_ 世界.html'
     files_dir = project_root / 'reference' / '精灵' / '精灵图鉴 _ 洛克王国_ 世界_files'
-    db_path = project_root / 'roko_monitor.db'
+    db_path = project_root / 'data' / 'roko_monitor.db'
     target_img_dir = project_root / 'data' / 'images' / 'sprites'
 
     print(f"项目根目录: {project_root}")

@@ -22,7 +22,7 @@ import re
 PROJECT_ROOT = Path(__file__).parent.parent
 HTML_PATH = PROJECT_ROOT / "reference" / "精灵" / "新建文件夹" / "精灵图鉴 - 洛克王国_手游WIKI_BWIKI_哔哩哔哩.html"
 HTML_FILES_DIR = PROJECT_ROOT / "reference" / "精灵" / "新建文件夹" / "精灵图鉴 - 洛克王国_手游WIKI_BWIKI_哔哩哔哩_files"
-DB_PATH = PROJECT_ROOT / "roko_monitor.db"
+DB_PATH = PROJECT_ROOT / "data" / "roko_monitor.db"
 IMAGES_SPRITES_DIR = PROJECT_ROOT / "data" / "images" / "sprites"
 IMAGES_ATTRIBUTES_DIR = PROJECT_ROOT / "data" / "images" / "attributes"
 

@@ -1,6 +1,6 @@
 import sqlite3
 
-conn = sqlite3.connect('roko_monitor.db')
+conn = sqlite3.connect('data/roko_monitor.db')
 cursor = conn.cursor()
 
 print('=== Current data ===')

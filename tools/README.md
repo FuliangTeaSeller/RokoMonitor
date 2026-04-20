@@ -22,7 +22,7 @@
 
 ```bash
 # 在项目根目录下执行
-sqlite3 roko_monitor.db < tools/init_database.sql
+sqlite3 data/roko_monitor.db < tools/init_database.sql
 ```
 
 ### 使用 Python 脚本初始化
@@ -31,7 +31,7 @@ sqlite3 roko_monitor.db < tools/init_database.sql
 import sqlite3
 
 # 连接数据库（不存在则创建）
-conn = sqlite3.connect('roko_monitor.db')
+conn = sqlite3.connect('data/roko_monitor.db')
 cursor = conn.cursor()
 
 # 读取并执行初始化脚本
@@ -145,6 +145,6 @@ python tools/import_skills_from_html.py
 脚本中使用的路径：
 - HTML文件: `reference/技能/技能图鉴.html`
 - HTML资源文件: `reference/技能/技能图鉴_files/`
-- 数据库: `roko_monitor.db`
+- 数据库: `data/roko_monitor.db`
 - 技能图片: `data/images/skills/`
 - 属性图片: `data/images/attributes/`

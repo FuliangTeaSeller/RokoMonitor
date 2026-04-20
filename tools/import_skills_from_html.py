@@ -23,7 +23,7 @@ from PIL import Image
 PROJECT_ROOT = Path(__file__).parent.parent
 HTML_PATH = PROJECT_ROOT / "reference" / "技能" / "技能图鉴.html"
 HTML_FILES_DIR = PROJECT_ROOT / "reference" / "技能" / "技能图鉴_files"
-DB_PATH = PROJECT_ROOT / "roko_monitor.db"
+DB_PATH = PROJECT_ROOT / "data" / "roko_monitor.db"
 IMAGES_SKILLS_DIR = PROJECT_ROOT / "data" / "images" / "skills"
 IMAGES_ATTRIBUTES_DIR = PROJECT_ROOT / "data" / "images" / "attributes"
 
