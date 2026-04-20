@@ -48,3 +48,6 @@ Thumbs.db
 # Project specific
 data/images/sprites/
 data/images/skills/
+
+#AI
+CLAUDE.md

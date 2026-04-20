@@ -1,11 +1,27 @@
 # RokoMonitor
 
-洛克王国世界 PVP 对战辅助工具 - 最小可行版本
+洛克王国世界 PVP 对战辅助工具
 
-## 快速启动
+## 如何使用
 
-### Windows
-双击 `run.bat` 或执行：
+### 首次使用（创建环境）
+```bash
+conda create -n rokomonitor python=3.11
+```
+
+### 安装依赖
+双击运行 `install.bat`
+
+或手动执行：
+```bash
+conda activate rokomonitor
+pip install -r requirements.txt
+```
+
+### 运行
+双击运行 `run.bat`
+
+或手动执行：
 ```bash
 conda activate rokomonitor
 python -m src.main
@@ -16,29 +32,32 @@ python -m src.main
 1. **精灵搜索** - 搜索精灵并查看技能池
 2. **悬浮窗** - 置顶显示对方精灵信息（可拖动、可关闭）
 3. **手动录入** - 添加新的精灵和技能
-4. **数据导入** - 从HTML技能图鉴导入数据
+4. **配队识别** - OCR 自动识别对方阵容精灵及技能
+5. **数据导入** - 从HTML技能图鉴导入数据
 
-## 已实现模块
+## 项目结构
 
 ```
 src/
-├── config.py              # 全局配置
+├── config.py              # 全局配置（截图区域、OCR参数）
 ├── main.py               # 应用入口
 ├── database/
 │   ├── models.py          # SQLAlchemy ORM 模型
 │   ├── connection.py      # 数据库连接与种子数据
 │   └── queries.py        # 查询接口
+├── capture/
+│   └── screen_capture.py  # 屏幕截图（基于 mss）
+├── ocr/
+│   ├── engine.py          # OCR 引擎（基于 PaddleOCR）
+│   └── text_match.py      # 精灵名称模糊匹配
+├── utils/
+│   └── pinyin_service.py  # 拼音服务
 └── ui/
     ├── main_window.py     # 主窗口
     ├── overlay.py         # 悬浮窗
-    └── entry_dialog.py   # 手动录入对话框
+    ├── entry_dialog.py    # 手动录入对话框
+    └── team_dialog.py     # 配队识别对话框
 ```
-
-## Mock 数据
-
-- 6 个属性：火、水、草、龙、冰、普通
-- 5 只精灵：焰火龙、水灵龟、翠叶蝶、霜翼龙、烈焰兽
-- 15 个技能
 
 ## 依赖
 
@@ -46,40 +65,28 @@ src/
 - SQLAlchemy >= 2.0
 - Pillow >= 10.0
 - beautifulsoup4 >= 4.12
+- mss >= 9.0（屏幕截图）
+- paddleocr >= 3.2（OCR 识别）
+- thefuzz >= 0.22（模糊匹配）
+- numpy >= 1.24
 
-## 工具脚本
+## 配队识别功能
 
-`tools/` 目录下提供以下实用脚本：
+配队识别功能可以自动识别游戏中的精灵阵容：
 
-### 数据导入
+### 识别模式
+- **单次识别** - 手动触发一次识别
+- **自动识别** - 按设定间隔持续识别
 
-- **[tools/import_skills_from_html.py](tools/import_skills_from_html.py)** - 从技能图鉴HTML导入数据
-  - 自动解析HTML提取技能信息
-  - 转换webp图片为png格式
-  - 自动创建属性和技能记录
+### 截图区域
+- **右上角（单精灵）** - 识别屏幕右上角的单个精灵
+- **配队列表（全阵容）** - 识别对方阵容列表
+- **首发页面（6精灵）** - 识别首发选择页面
 
-- **[tools/clean_data.py](tools/clean_data.py)** - 清空数据库所有数据
+### 功能特性
+- 6 个精灵槽位，支持识别覆盖和手动输入
+- 横向滚动查看技能详情
+- 全屏展示模式
+- 截图预览
+- 识别成功率统计
 
-### 批处理文件
-
-- **[install_deps.bat](install_deps.bat)** - 安装项目依赖
-- **[tools/run_import.bat](tools/run_import.bat)** - 运行技能导入脚本
-- **[tools/setup_and_import.bat](tools/setup_and_import.bat)** - 一键安装依赖并导入数据
-
-### 测试
-
-- **[tools/test_dependencies.py](tools/test_dependencies.py)** - 测试依赖是否正确安装
-
-### 使用方法
-
-**方式一：一键安装并导入**
-```cmd
-双击 tools\setup_and_import.bat
-```
-
-**方式二：手动执行**
-```cmd
-conda activate rokomonitor
-pip install -r requirements.txt
-python tools/import_skills_from_html.py
-```
