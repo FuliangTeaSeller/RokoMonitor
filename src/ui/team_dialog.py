@@ -1,6 +1,7 @@
 """配队识别对话框"""
 
 import logging
+from enum import Enum
 from typing import Optional
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -23,6 +24,19 @@ from src.ui.image_utils import load_icon
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+
+class RecognitionStage(Enum):
+    """识别流程阶段"""
+    INIT = ("初始化", 0)
+    CAPTURE = ("截图", 1)
+    OCR = ("OCR", 2)
+    MATCH = ("匹配", 3)
+    QUERY = ("查询", 4)
+
+    def __init__(self, label: str, index: int):
+        self.label = label
+        self.index = index
 
 
 class SpriteSearchDialog(QDialog):
@@ -716,10 +730,64 @@ class TeamRecognitionDialog(QDialog):
 
         return frame
 
+    def _create_step_indicator(self) -> QFrame:
+        """创建步骤指示器"""
+        frame = QFrame()
+        layout = QHBoxLayout(frame)
+        layout.setSpacing(2)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._step_labels: dict[RecognitionStage, QLabel] = {}
+
+        stages = list(RecognitionStage)
+        for i, stage in enumerate(stages):
+            label = QLabel(f"○{stage.label}")
+            label.setStyleSheet("color: #6c7086; font-size: 11px;")
+            self._step_labels[stage] = label
+            layout.addWidget(label)
+
+            if i < len(stages) - 1:  # 最后一个不加箭头
+                arrow = QLabel("→")
+                arrow.setStyleSheet("color: #6c7086; font-size: 11px;")
+                layout.addWidget(arrow)
+
+        return frame
+
+    def _update_stage(self, stage: RecognitionStage, status: str):
+        """更新阶段状态
+
+        Args:
+            stage: 当前阶段
+            status: pending(○), running(⏳), done(✓), error(✗)
+        """
+        symbols = {"pending": "○", "running": "⏳", "done": "✓", "error": "✗"}
+        colors = {"pending": "#6c7086", "running": "#f9e2af", "done": "#a6e3a1", "error": "#f38ba8"}
+
+        # 更新当前阶段
+        label = self._step_labels[stage]
+        symbol = symbols.get(status, "○")
+        label.setText(f"{symbol}{stage.label}")
+        label.setStyleSheet(f"color: {colors.get(status, '#6c7086')}; font-size: 11px;")
+
+        # 更新之前阶段为完成，之后阶段为待执行
+        for s in RecognitionStage:
+            if s.index < stage.index and status != "error":
+                self._step_labels[s].setText(f"✓{s.label}")
+                self._step_labels[s].setStyleSheet("color: #a6e3a1; font-size: 11px;")
+            elif s.index > stage.index:
+                self._step_labels[s].setText(f"○{s.label}")
+                self._step_labels[s].setStyleSheet("color: #6c7086; font-size: 11px;")
+
+    def _reset_stages(self):
+        """重置所有阶段为待执行状态"""
+        for stage in RecognitionStage:
+            self._step_labels[stage].setText(f"○{stage.label}")
+            self._step_labels[stage].setStyleSheet("color: #6c7086; font-size: 11px;")
+
     def _create_status_group(self) -> QFrame:
         """创建状态信息区"""
         frame = QFrame()
-        frame.setFixedWidth(150)  # 固定宽度
+        frame.setFixedWidth(200)  # 增加宽度以容纳步骤指示器
         frame.setStyleSheet("""
             QFrame {
                 background-color: #313244;
@@ -734,7 +802,11 @@ class TeamRecognitionDialog(QDialog):
         self._count_label = QLabel("识别次数：0")
         self._success_label = QLabel("成功率：0%")
 
+        # 步骤指示器
+        self._step_indicator = self._create_step_indicator()
+
         layout.addWidget(self._status_label)
+        layout.addWidget(self._step_indicator)
         layout.addWidget(self._count_label)
         layout.addWidget(self._success_label)
         layout.addStretch()
@@ -896,8 +968,12 @@ class TeamRecognitionDialog(QDialog):
         self._stats["total"] += 1
         print(f"[配队识别] ========== 开始第 {self._stats['total']} 次识别 ==========")
 
+        # 重置阶段状态
+        self._reset_stages()
+
         try:
             # 1. 初始化组件（懒加载）
+            self._update_stage(RecognitionStage.INIT, "running")
             try:
                 if self._capture is None:
                     print("[配队识别] 检查: 需要初始化截图组件")
@@ -907,6 +983,7 @@ class TeamRecognitionDialog(QDialog):
                     print("[配队识别] 检查: 截图组件已存在")
             except Exception as e:
                 logger.error(f"[配队识别] 截图组件初始化失败: {str(e)}", exc_info=True)
+                self._update_stage(RecognitionStage.INIT, "error")
                 raise
 
             try:
@@ -919,6 +996,7 @@ class TeamRecognitionDialog(QDialog):
                     print("[配队识别] 检查: OCR 引擎已存在")
             except Exception as e:
                 logger.error(f"[配队识别] OCR 引擎初始化失败: {str(e)}", exc_info=True)
+                self._update_stage(RecognitionStage.INIT, "error")
                 raise
 
             try:
@@ -930,9 +1008,12 @@ class TeamRecognitionDialog(QDialog):
                     print("[配队识别] 检查: 模糊匹配器已存在")
             except Exception as e:
                 logger.error(f"[配队识别] 模糊匹配器初始化失败: {str(e)}", exc_info=True)
+                self._update_stage(RecognitionStage.INIT, "error")
                 raise
+            self._update_stage(RecognitionStage.INIT, "done")
 
             # 2. 截图
+            self._update_stage(RecognitionStage.CAPTURE, "running")
             if self._top_right_radio.isChecked():
                 region_type = "top_right"
             elif self._team_list_radio.isChecked():
@@ -946,14 +1027,17 @@ class TeamRecognitionDialog(QDialog):
                 region["x"], region["y"], region["width"], region["height"]
             )
             print(f"[配队识别] 截图完成，图像尺寸: {screenshot.shape}")
+            self._update_stage(RecognitionStage.CAPTURE, "done")
 
             # 更新截图预览
             self._update_screenshot_preview(screenshot)
 
             # 3. OCR 识别
+            self._update_stage(RecognitionStage.OCR, "running")
             print("[配队识别] 开始 OCR 文字识别...")
             ocr_results = self._ocr_engine.recognize_text_only(screenshot)
             print(f"[配队识别] OCR 识别完成，识别到 {len(ocr_results)} 个文本: {ocr_results}")
+            self._update_stage(RecognitionStage.OCR, "done")
 
             if not ocr_results:
                 logger.warning("[配队识别] 未识别到文字")
@@ -963,12 +1047,14 @@ class TeamRecognitionDialog(QDialog):
                 return
 
             # 4. 模糊匹配
+            self._update_stage(RecognitionStage.MATCH, "running")
             print("[配队识别] 开始模糊匹配精灵名称...")
             matched_sprites = self._matcher.match_all(ocr_results, OCR_CONFIG["fuzzy_threshold"])
 
             # 过滤未匹配的结果
             valid_names = [m["matched_name"] for m in matched_sprites if m["matched_name"]]
             print(f"[配队识别] 模糊匹配结果: {matched_sprites}")
+            self._update_stage(RecognitionStage.MATCH, "done")
 
             if not valid_names:
                 logger.warning(f"[配队识别] 未能匹配到精灵，阈值: {OCR_CONFIG['fuzzy_threshold']}")
@@ -978,6 +1064,7 @@ class TeamRecognitionDialog(QDialog):
                 return
 
             # 5. 查询数据库
+            self._update_stage(RecognitionStage.QUERY, "running")
             print(f"[配队识别] 开始查询数据库，精灵名称: {valid_names}")
             sprite_details = []
             for name in valid_names:
@@ -987,6 +1074,7 @@ class TeamRecognitionDialog(QDialog):
                     print(f"[配队识别] 查询精灵成功: {name}, 技能数: {len(info.skills)}")
                 else:
                     logger.warning(f"[配队识别] 数据库中未找到精灵: {name}")
+            self._update_stage(RecognitionStage.QUERY, "done")
 
             if not sprite_details:
                 logger.warning("[配队识别] 数据库中未找到任何匹配的精灵")
