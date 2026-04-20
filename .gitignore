@@ -34,8 +34,6 @@ ENV/
 *.swo
 *~
 
-# Database
-*.db
 
 # Logs
 *.log
@@ -44,10 +42,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
-
-# Project specific
-data/images/sprites/
-data/images/skills/
 
 #AI
 CLAUDE.md
