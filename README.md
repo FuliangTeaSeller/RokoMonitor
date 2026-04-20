@@ -1,5 +1,7 @@
 # RokoMonitor
 
+<img src="reference/图片/logo.png" alt="Logo" width="120" height="120">
+
 洛克王国世界 PVP 对战辅助工具
 
 ## 如何使用
